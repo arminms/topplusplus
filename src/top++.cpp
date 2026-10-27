@@ -1,12 +1,76 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Armin Sobhani
 //
+#include <algorithm>
 #include <chrono>
+#include <limits>
 #include <format>
 #include <memory>
 
 #include "monitor.hpp"
 #include "cpu_elements.hpp"
+
+#include <ftxui/dom/node.hpp>
+
+namespace
+{   struct scroll_state
+    {   int offset = 0;
+        int max_offset = 0;
+        int view_height = 1;
+        ftxui::Box view;
+    };
+
+    // Vertical viewport whose offset is controlled by the application.
+    ftxui::Decorator scroll_view(scroll_state& st)
+    {   class Impl : public ftxui::Node
+        {   public:
+                Impl(ftxui::Element child, scroll_state& st)
+                :   Node(ftxui::Elements{std::move(child)}), st_(st) {}
+                void ComputeRequirement() override
+                {   Node::ComputeRequirement();
+                    requirement_ = children_[0]->requirement();
+                    requirement_.min_y = 1;
+                    requirement_.flex_grow_y = 1;
+                    requirement_.flex_shrink_y = 1;
+                }
+                void SetBox(ftxui::Box box) override
+                {   Node::SetBox(box);
+                    const int height = box.y_max - box.y_min + 1;
+                    const int content
+                    =   std::max(children_[0]->requirement().min_y, height);
+                    st_.view = box;
+                    st_.view_height = std::max(1, height);
+                    st_.max_offset = content - height;
+                    st_.offset = std::clamp(st_.offset, 0, st_.max_offset);
+                    ftxui::Box cb = box;
+                    cb.y_min = box.y_min - st_.offset;
+                    cb.y_max = cb.y_min + content - 1;
+                    children_[0]->SetBox(cb);
+                }
+                void Render(ftxui::Screen& screen) override
+                {   const ftxui::Box saved = screen.stencil;
+                    screen.stencil = ftxui::Box::Intersection(box_, saved);
+                    struct restore { ftxui::Box& r; ftxui::Box v; ~restore() { r = v; } } rs{screen.stencil, saved};
+                    children_[0]->Render(screen);
+                    if (st_.max_offset <= 0)
+                        return;
+                    const int height = box_.y_max - box_.y_min + 1;
+                    const int content = height + st_.max_offset;
+                    const int size = std::max(1, height * height / content);
+                    const int start
+                    =   st_.offset * (height - size) / st_.max_offset;
+                    for (int y = 0; y < height; ++y)
+                    {   auto& px = screen.PixelAt(box_.x_max, box_.y_min + y);
+                        px.character = y >= start && y < start + size ? "┃" : " ";
+                    }
+                }
+            private:
+                scroll_state& st_;
+        };
+        return [&st](ftxui::Element child)
+        {   return std::make_shared<Impl>(std::move(child), st); };
+    }
+}
 
 using namespace std::chrono_literals;
 using namespace ftxui;
@@ -21,8 +85,9 @@ int main()
     monitor monitors;
     auto screen = App::Fullscreen();
 
+    scroll_state scroll;
     auto cpu_tab = Renderer
-    (   [&screen, &cpus, &monitors]
+    (   [&screen, &cpus, &monitors, &scroll]
         {   const auto& cpu = cpus->front();
             const auto& cpu_load = monitors().cpu;
             int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
@@ -85,11 +150,7 @@ int main()
             |   size(WIDTH, LESS_THAN, term_width);
 
             // Make it scrollable by piping into vscroll_indicator, frame, and a height limit
-            auto scrollable_grid
-            =   grid_content
-            |   vscroll_indicator 
-            |   frame 
-            ;
+            auto scrollable_grid = grid_content | scroll_view(scroll);
 
             cpu_tab->Add(Renderer([cpu_info] { return cpu_info; }));
             cpu_tab->Add(Renderer([scrollable_grid] { return scrollable_grid; }));
@@ -211,7 +272,35 @@ int main()
         }
     );
 
-    Loop loop(&screen, main_renderer);
+    auto scrollable = CatchEvent
+    (   main_renderer
+    ,   [&](Event e)
+        {   if (tab_index != 0)
+                return false;
+            const int view_h = scroll.view_height;
+            if (e.is_mouse())
+            {   if (!scroll.view.Contain(e.mouse().x, e.mouse().y))
+                    return false;
+                if (e.mouse().button == Mouse::WheelUp)
+                    scroll.offset -= 3;
+                else if (e.mouse().button == Mouse::WheelDown)
+                    scroll.offset += 3;
+                else
+                    return false;
+                return true;
+            }
+            if (e == Event::ArrowUp) scroll.offset -= 1;
+            else if (e == Event::ArrowDown) scroll.offset += 1;
+            else if (e == Event::PageUp) scroll.offset -= view_h;
+            else if (e == Event::PageDown) scroll.offset += view_h;
+            else if (e == Event::Home) scroll.offset = 0;
+            else if (e == Event::End) scroll.offset = std::numeric_limits<int>::max() / 2;
+            else return false;
+            return true;
+        }
+    );
+
+    Loop loop(&screen, scrollable);
     while (!loop.HasQuitted())
     {   // Update the state of the application.
         monitors.tick();
