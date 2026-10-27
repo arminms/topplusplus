@@ -6,7 +6,7 @@
 #include <memory>
 
 #include "monitor.hpp"
-#include "cpu_component.hpp"
+#include "cpu_elements.hpp"
 
 using namespace std::chrono_literals;
 using namespace ftxui;
@@ -68,9 +68,31 @@ int main()
             |   border
             // |   bgcolor(Color::RGB(30, 35, 57))
             ;
-            cpu_tab->Add(Renderer([cpu_info] { return cpu_info; }));
+
+            Elements sockets;
             for (const auto& cpu : *cpus)
-                cpu_tab->Add(cpu_component(screen, cpu, monitors().cpu, monitors().frequencies));
+                sockets.append_range(socket_content(screen, cpu, monitors().cpu, monitors().frequencies));
+
+            // Configure flexbox wrapping with gaps
+            FlexboxConfig config;
+            config.wrap = FlexboxConfig::Wrap::Wrap;
+            config.direction = FlexboxConfig::Direction::Column;
+            // config.SetGap(1, 1);
+            // Build the flexbox grid
+            auto grid_content
+            =   flexbox(sockets, config)
+            |   color(Color::RGB(126, 133, 163))
+            |   size(WIDTH, LESS_THAN, term_width);
+
+            // Make it scrollable by piping into vscroll_indicator, frame, and a height limit
+            auto scrollable_grid
+            =   grid_content
+            |   vscroll_indicator 
+            |   frame 
+            ;
+
+            cpu_tab->Add(Renderer([cpu_info] { return cpu_info; }));
+            cpu_tab->Add(Renderer([scrollable_grid] { return scrollable_grid; }));
             return cpu_tab->Render()
             |   flex
             ;
