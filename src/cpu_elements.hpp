@@ -3,7 +3,9 @@
 //
 #pragma once
 
+#include <algorithm>
 #include <format>
+#include <vector>
 
 #include <ftxui/ftxui.hpp>
 #include <hwinfo/hwinfo.h>
@@ -58,23 +60,19 @@ ftxui::Elements socket_content
 
             gauge_elements.push_back(item);
         }
-        // // Configure flexbox wrapping with gaps
-        FlexboxConfig config;
-        // config.wrap = FlexboxConfig::Wrap::Wrap;
-        // config.direction = FlexboxConfig::Direction::Row;
-        // // config.SetGap(1, 1);
-        // Build the flexbox grid
+        // Fixed-width cells: always lay out every gauge, wrapping by columns
+        constexpr int cell_width = 35;
+        const size_t columns = std::max(1, (term_width - 2) / cell_width);
+        std::vector<Elements> rows;
+        for (size_t i = 0; i < gauge_elements.size(); i += columns)
+        {   Elements row;
+            for (size_t j = i; j < i + columns; ++j)
+                row.push_back(j < gauge_elements.size() ? gauge_elements[j] : emptyElement());
+            rows.push_back(std::move(row));
+        }
         auto grid_content
-        =   flexbox(gauge_elements, config)
-        |   color(Color::RGB(126, 133, 163))
-        |   size(WIDTH, LESS_THAN, term_width);
-
-        // Make it scrollable by piping into vscroll_indicator, frame, and a height limit
-        // auto scrollable_grid
-        // =   grid_content
-        // |   vscroll_indicator 
-        // |   frame 
-        // | 
+        =   gridbox(std::move(rows))
+        |   color(Color::RGB(126, 133, 163));
 
         const auto count = [&](CoreType type)
         {   return std::ranges::count(cpu.cores, type, &Core::type);
@@ -106,8 +104,7 @@ ftxui::Elements socket_content
                 |   color(Color::RGB(197, 207, 245))
                 |   hcenter
             ,   separator()
-            ,   grid_content // comment out this line and uncomment the next line to use scrollable grid
-            // ,   scrollable_grid
+            ,   grid_content
             })
             // |   color(Color::RGB(197, 207, 245))
             |   border
