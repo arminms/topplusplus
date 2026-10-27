@@ -228,8 +228,14 @@ int main()
             else if (e == Event::PageUp) scroll.offset -= view_h;
             else if (e == Event::PageDown) scroll.offset += view_h;
             else if (e == Event::Home) scroll.offset = 0;
-            else if (e == Event::End) scroll.offset = std::numeric_limits<int>::max() / 2;
-            else return false;
+            else if (e == Event::End)
+                scroll.offset = std::numeric_limits<int>::max() / 2;
+            else if (e == Event::Escape || e == Event::Character('q'))
+            {   screen.Exit();
+                return true;
+            }
+            else
+                return false;
             return true;
         }
     );
