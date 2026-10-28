@@ -22,7 +22,7 @@ include(Catch)
 function(add_unit_tests TEST_NAME TEST_SOURCE)
   get_filename_component(TEST_TARGET ${TEST_SOURCE} NAME_WE)
   add_executable(${TEST_TARGET} ${TEST_SOURCE})
-  target_link_libraries(${TEST_TARGET} PRIVATE Catch2::Catch2WithMain)
+  target_link_libraries(${TEST_TARGET} PRIVATE Catch2::Catch2WithMain lfreist-hwinfo::hwinfo)
   target_include_directories(${TEST_TARGET} PRIVATE ${PROJECT_SOURCE_DIR}/src)
   target_compile_features(${TEST_TARGET} PRIVATE cxx_std_23)
 endfunction()
@@ -32,7 +32,11 @@ endfunction()
 add_unit_tests("circular_buffer_64" test_circular_buffer.cpp
   TEST_PREFIX "[circular_buffer_64] "
   )
+add_unit_tests("monitor" test_monitor.cpp
+  TEST_PREFIX "[monitor] "
+  )
 
 ## finally adding unit tests
 #
 catch_discover_tests(test_circular_buffer)
+catch_discover_tests(test_monitor)
