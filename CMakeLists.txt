@@ -3,6 +3,16 @@
 #
 cmake_minimum_required(VERSION 3.25.2...4.4.0)
 
+## life is about choices...
+#
+option(TOPPP_ENABLE_TESTS "Enable the unit tests ?" OFF)
+
+## vcpkg manifest features
+#
+if(${TOPPP_ENABLE_TESTS})
+  list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
 ## finally our project...
 #
 project(
@@ -54,6 +64,13 @@ if(NOT lfreist-hwinfo_FOUND)
       GIT_TAG        main
     )
     FetchContent_MakeAvailable(hwinfo)
+endif()
+
+## add unit tests
+#
+if(${TOPPP_ENABLE_TESTS})
+  enable_testing()
+  add_subdirectory(test)
 endif()
 
 add_executable(top++ src/top++.cpp)
