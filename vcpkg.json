@@ -4,5 +4,11 @@
       "name": "ftxui",
       "version>=": "7.0.3"
     }
-  ]
+  ],
+  "features": {
+    "tests": {
+      "description": "Dependencies needed for the unit tests",
+      "dependencies": [ "catch2" ]
+    }
+  }
 }
