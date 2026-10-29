@@ -171,6 +171,9 @@ ftxui::Elements socket_content_plot
         const std::size_t n = std::min(h.size(), window);
         const std::size_t offset = h.size() - n;
         const double now = n ? h[h.size() - 1] : 0.0;
+        const auto frequency
+        =   snap.frequencies && i < snap.frequencies->size()
+        ?   std::format("{:>11GHz}", (*snap.frequencies)[i]) : std::string{};
 
         const auto to_y = [&](double load)
         {   return static_cast<int>
@@ -202,9 +205,12 @@ ftxui::Elements socket_content_plot
                     (   {   text(std::format(" Core{:3}", i))
                         |   color(text_color)
                         |   size(WIDTH, EQUAL, 8)
-                        ,   filler()
+                        ,   text(std::format("{:^16}", frequency))
+                        |   dim
+                        |   size(WIDTH, EQUAL, 16)
                         ,   text(std::format("{:6.1f}% ", now * 100.0))
                         |   color(text_color)
+                        |   size(WIDTH, EQUAL, 7)
                         }
                     )
                 ,   separator()
