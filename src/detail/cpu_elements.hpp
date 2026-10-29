@@ -100,7 +100,7 @@ inline ftxui::Element core_cell
                 |   dim
                 |   size(WIDTH, EQUAL, 16)
                 ,   text(std::format("{:6.1f}% ", load * 100.0))
-                |   color(text_color)
+                |   color(load_color(load))
                 |   size(WIDTH, EQUAL, 7)
                 }
             )
