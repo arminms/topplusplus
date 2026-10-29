@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <iterator>
 #include <format>
 #include <string>
 #include <vector>
@@ -35,6 +37,30 @@ inline std::string core_count_string(hwinfo::Cpu const& cpu)
 
 inline const auto text_color = ftxui::Color::RGB(197, 207, 245);
 inline const auto graph_color = ftxui::Color::RGB(198, 160, 246);
+
+// Continuous shade from green (0) through yellow and orange to red (1)
+inline ftxui::Color load_color(double load)
+{   struct stop { double at; int r, g, b; };
+    static constexpr stop stops[] =
+    {   {0.00,  80, 200,  80}
+    ,   {0.50, 240, 220,  60}
+    ,   {0.75, 245, 150,  50}
+    ,   {1.00, 230,  60,  60}
+    };
+    load = std::clamp(load, 0.0, 1.0);
+    for (std::size_t i = 1; i < std::size(stops); ++i)
+    {   if (load > stops[i].at)
+            continue;
+        const auto& a = stops[i - 1];
+        const auto& b = stops[i];
+        const double t = (load - a.at) / (b.at - a.at);
+        const auto mix = [t](int u, int v)
+        {   return static_cast<std::uint8_t>(std::lround(u + (v - u) * t));
+        };
+        return ftxui::Color::RGB(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b));
+    }
+    return ftxui::Color::RGB(stops[3].r, stops[3].g, stops[3].b);
+}
 
 constexpr int cell_width = 35;
 constexpr int graph_cols = 31;

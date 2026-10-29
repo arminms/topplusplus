@@ -90,31 +90,25 @@ ftxui::Elements socket_content_filled_plot
     (   screen, cpu, mon
     ,   [](Canvas& c, auto const& geo, auto const& h, std::size_t offset)
         {   // A vertical line from the baseline up to the (linearly
-            // interpolated) load at every pixel column.
-            const auto fill = [&](int x, int y)
+            // interpolated) load at every pixel column, colored by that load.
+            const auto fill = [&](int x, double load)
             {   c.DrawPointLine
-                (   x, y, x, geo.px_h - 1, detail::graph_color
+                (   x, geo.y(load), x, geo.px_h - 1, detail::load_color(load)
                 );
             };
             for (std::size_t k = 0; k < geo.n; ++k)
             {   const int x1 = geo.x(k);
-                const int y1 = geo.y(h[offset + k]);
+                const double l1 = h[offset + k];
                 if (k == 0)
-                {   fill(x1, y1);
+                {   fill(x1, l1);
                     continue;
                 }
                 const int x0 = geo.x(k - 1);
-                const int y0 = geo.y(h[offset + k - 1]);
+                const double l0 = h[offset + k - 1];
                 for (int x = x0 + 1; x <= x1; ++x)
                     fill
                     (   x
-                    ,   x1 == x0
-                        ?   y1
-                        :   y0 + static_cast<int>
-                            (   std::lround
-                                (   double(y1 - y0) * (x - x0) / (x1 - x0)
-                                )
-                            )
+                    ,   x1 == x0 ? l1 : l0 + (l1 - l0) * (x - x0) / (x1 - x0)
                     );
             }
         }
