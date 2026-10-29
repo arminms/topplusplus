@@ -228,8 +228,6 @@ ftxui::Elements socket_content_plot
                             )
                         )
                     |   bold
-                    ,   text(::detail::core_count_string(cpu))
-                    |   dim
                     }
                 )
                 |   color(text_color)
@@ -378,8 +376,6 @@ ftxui::Elements socket_content_plot_filled
                             )
                         )
                     |   bold
-                    ,   text(::detail::core_count_string(cpu))
-                    |   dim
                     }
                 )
                 |   color(text_color)
