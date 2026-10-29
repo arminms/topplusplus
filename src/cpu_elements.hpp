@@ -12,6 +12,7 @@
 #include <hwinfo/hwinfo.h>
 
 #include "monitor.hpp"
+#include "detail/cpu_elements.hpp"
 
 ftxui::Elements socket_content
 (   decltype(ftxui::App::Fullscreen()) const& screen
@@ -88,31 +89,12 @@ ftxui::Elements socket_content
         rows.push_back(std::move(row));
     }
 
-    const auto count = [&](CoreType type)
-    {   return std::ranges::count(cpu.cores, type, &Core::type);
-    };
-    std::string core_count
-    =   cpu.is_hybrid()
-    ?   std::format
-        (   "{} cores ({} Performance + {} Efficiency, {} threads)"
-        ,   cpu.physical_cores
-        ,   count(CoreType::performance)
-        ,   count(CoreType::efficiency)
-        ,   cpu.logical_cores
-        )
-    :   std::format
-        (   "{} cores ({} threads)"
-        ,   cpu.physical_cores
-        ,   cpu.logical_cores
-        )
-    ;
-
     socket_elements.push_back
     (   vbox
         (   {   hbox
                 (   {   text(std::format("Socket {} - ", cpu.socket))
                     |   bold
-                    ,   text(core_count)
+                    ,   text(::detail::core_count_string(cpu))
                     |   dim
                     }
                 )
@@ -236,13 +218,20 @@ ftxui::Elements socket_content_plot
 
     socket_elements.push_back
     (   vbox
-        (   {   text
-                (   std::format
-                    (   "Socket {} - {} threads, last {} s"
-                    ,   cpu.socket, cpu.logical_cores, window
-                    )
+        (   {   hbox
+                (   {   text
+                        (   std::format
+                            (   "Socket {} - {}, last {} seconds"
+                            ,   cpu.socket
+                            ,   ::detail::core_count_string(cpu)
+                            ,   window
+                            )
+                        )
+                    |   bold
+                    ,   text(::detail::core_count_string(cpu))
+                    |   dim
+                    }
                 )
-                |   bold
                 |   color(text_color)
                 |   hcenter
             ,   separator()
@@ -379,13 +368,20 @@ ftxui::Elements socket_content_plot_filled
 
     socket_elements.push_back
     (   vbox
-        (   {   text
-                (   std::format
-                    (   "Socket {} - {} threads, last {} s"
-                    ,   cpu.socket, cpu.logical_cores, window
-                    )
+        (   {   hbox
+                (   {   text
+                        (   std::format
+                            (   "Socket {} - {}, last {} seconds"
+                            ,   cpu.socket
+                            ,   ::detail::core_count_string(cpu)
+                            ,   window
+                            )
+                        )
+                    |   bold
+                    ,   text(::detail::core_count_string(cpu))
+                    |   dim
+                    }
                 )
-                |   bold
                 |   color(text_color)
                 |   hcenter
             ,   separator()
@@ -396,5 +392,6 @@ ftxui::Elements socket_content_plot_filled
     |   border
     |   flex
     );
+
     return socket_elements;
 }
