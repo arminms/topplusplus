@@ -77,7 +77,7 @@ int main()
 
             Elements sockets;
             for (const auto& cpu : *cpus)
-                // sockets.append_range(socket_content(screen, cpu, monitors().cpu, monitors().frequencies));
+                // sockets.append_range(socket_content(screen, cpu, monitors));
                 sockets.append_range(socket_content_plot_filled(screen, cpu, monitors));
 
             auto grid_content
