@@ -152,6 +152,7 @@ int main()
         ,   tab_content,
         }
     );
+    double fps = 0.0;
     // remove GPU tab if no GPUs are detected
     if (gpus && gpus->empty())
     {   tab_entries.erase(tab_entries.begin() + 1);
@@ -182,9 +183,10 @@ int main()
                     (   {   text(" 🔝++") | bold | color(Color::RGB(138, 92, 245))
                         ,   filler()
                         ,   host_info | color(Color::RGB(197, 207, 245))
-                        ,   text(" • ") | bold | color(Color::RGB(198, 160, 246))
-                        // ,   text(hwinfo::to_string(*os)) | color(Color::GrayLight)
+                        ,   text(" | ") | dim
                         ,   uptime_info | color(Color::RGB(197, 207, 245))
+                        ,   text(" | ") | dim
+                        ,   text(std::format("FPS: {:.1f}", fps)) | color(Color::RGB(197, 207, 245))
                         ,   filler()
                         ,   exit_button->Render()
                         }
@@ -242,6 +244,9 @@ int main()
     );
 
     Loop loop(&screen, scrollable);
+    auto fps_window_start = std::chrono::steady_clock::now();
+    int frames_since_update = 0;
+    int wait_time_ms = 1000 / 60; // Targeting 60 FPS
     while (!loop.HasQuitted())
     {   // Update the state of the application.
         monitors.tick();
@@ -252,8 +257,23 @@ int main()
         // Execute events, and draw the next frame.
         loop.RunOnce();
 
+        ++frames_since_update;
+        const auto now = std::chrono::steady_clock::now();
+        const auto elapsed = now - fps_window_start;
+        if (elapsed >= 1s)
+        {   fps = frames_since_update / std::chrono::duration<double>(elapsed).count();
+            frames_since_update = 0;
+            fps_window_start = now;
+            // Adjust wait_time_ms based on the actual FPS to maintain a target of 60 FPS.
+            if (fps < 60.0)
+                wait_time_ms--;
+            else if (fps > 60.0)
+                wait_time_ms++;
+            wait_time_ms = std::clamp<int>(wait_time_ms, 1, 50);
+        }
+
         // Sleep for a short duration to control the frame rate (60 FPS).
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000 / 60));
+        std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
     }
 
     return 0;
