@@ -78,7 +78,7 @@ int main()
             Elements sockets;
             for (const auto& cpu : *cpus)
                 // sockets.append_range(socket_content(screen, cpu, monitors));
-                sockets.append_range(socket_content_plot_filled(screen, cpu, monitors));
+                sockets.append_range(socket_content_filled_plot(screen, cpu, monitors));
 
             auto grid_content
             =   vbox(std::move(sockets))
