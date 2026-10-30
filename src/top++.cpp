@@ -9,6 +9,7 @@
 
 #include "monitor.hpp"
 #include "cpu_elements.hpp"
+#include "gpu_elements.hpp"
 #include "scroll_view.hpp"
 
 #include <ftxui/dom/node.hpp>
@@ -27,9 +28,10 @@ int main()
     monitor monitors(static_cast<std::size_t>(target_fps));
     auto screen = App::Fullscreen();
 
-    scroll_state scroll;
+    scroll_state cpu_scroll;
+    scroll_state gpu_scroll;
     auto cpu_tab = Renderer
-    (   [&screen, &cpus, &monitors, &scroll]
+    (   [&screen, &cpus, &monitors, &cpu_scroll]
         {   const auto& cpu = cpus->front();
             const auto& cpu_load = monitors().cpu;
             int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
@@ -86,7 +88,7 @@ int main()
             |   color(Color::RGB(126, 133, 163))
             |   size(WIDTH, LESS_THAN, term_width);
 
-            auto scrollable_grid = grid_content | scroll_view(scroll);
+            auto scrollable_grid = grid_content | scroll_view(cpu_scroll);
 
             cpu_tab->Add(Renderer([cpu_info] { return cpu_info; }));
             cpu_tab->Add(Renderer([scrollable_grid] { return scrollable_grid; }));
@@ -97,15 +99,22 @@ int main()
     );
 
     auto gpu_tab = Renderer
-    (   [&gpus]
+    (   [&screen, &gpus, &monitors, &gpu_scroll]
         {   auto gpu_list = Container::Vertical({});
             if (!gpus)
-                return text(std::format("Error: {}", gpus.error())) | color(Color::Blue);
+                return text(std::format("Error: {}", gpus.error())) | flex;
             if (gpus->empty())
-                return text("No GPUs were detected") | color(Color::Blue);
-            for (const auto& gpu : *gpus)
-                gpu_list->Add(Renderer([gpu] { return text(" - " + hwinfo::to_string(gpu)) | color(Color::Blue); }));
-            return gpu_list->Render() | flex | color(Color::Blue);
+                return text("No GPUs were detected") | flex;
+
+            Elements devices;
+            for (std::size_t i = 0; i < gpus->size(); ++i)
+                devices.push_back(detail::gpu_content(screen, (*gpus)[i], i, monitors));
+            auto content = vbox(std::move(devices))
+            |   size(WIDTH, LESS_THAN, screen.dimx() > 6 ? screen.dimx() - 6 : 40)
+            |   color(Color::RGB(126, 133, 163));
+            auto scrollable_content = content | scroll_view(gpu_scroll);
+            gpu_list->Add(Renderer([scrollable_content] { return scrollable_content; }));
+            return gpu_list->Render() | flex;
         }
     );
 
@@ -212,8 +221,9 @@ int main()
     auto scrollable = CatchEvent
     (   main_renderer
     ,   [&](Event e)
-        {   if (tab_index != 0)
+        {   if (tab_index < 0 || tab_index > 1)
                 return false;
+            auto& scroll = tab_index == 0 ? cpu_scroll : gpu_scroll;
             const int view_h = scroll.view_height;
             if (e.is_mouse())
             {   if (!scroll.view.Contain(e.mouse().x, e.mouse().y))
