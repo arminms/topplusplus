@@ -227,6 +227,97 @@ ftxui::Element gpu_plot_2d
     ;
 }
 
+// Both series as lines in a single canvas: GPU load in green and GPU memory
+// usage in yellow. The legends sit in the upper left corner of the canvas, in
+// headroom reserved above the plot area.
+template <typename LoadValue, typename MemoryValue>
+ftxui::Element gpu_plot_load_n_memory
+(   std::string load_legend
+,   std::string memory_legend
+,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
+,   LoadValue load_value
+,   MemoryValue memory_value
+)
+{   using namespace ftxui;
+    const std::size_t n = std::min(history.size(), window);
+    auto plot = canvas
+    (   [   &history, n, load_value, memory_value
+        ,   load_legend = std::move(load_legend)
+        ,   memory_legend = std::move(memory_legend)
+        ]
+        (Canvas& c)
+        {   constexpr int legend_rows = 2;
+            constexpr int cell_height = 4;
+            constexpr int top = legend_rows * cell_height;
+            const int width = c.width();
+            const int height = c.height();
+            if (width < 2 || height <= top + 1)
+                return;
+
+            const auto legend = [&c](int row, Color color, std::string const& label)
+            {   c.DrawText(0, row * cell_height, "■", color);
+                c.DrawText(4, row * cell_height, label);
+            };
+            legend(0, Color::Green, load_legend);
+            legend(1, Color::Yellow, memory_legend);
+
+            if (!n)
+                return;
+            const auto x = [width, n](std::size_t k)
+            {   return width - 1 - static_cast<int>
+                (   std::lround
+                    (   double(n - 1 - k) * (width - 1)
+                    /   (window - 1)
+                    )
+                );
+            };
+            const auto y = [height](double value)
+            {   return top + static_cast<int>
+                (   std::lround
+                    (   (1.0 - std::clamp(value, 0.0, 1.0))
+                    *   (height - 1 - top)
+                    )
+                );
+            };
+            const auto trace = [&](auto const& value, Color color)
+            {   std::optional<std::pair<int, int>> previous;
+                for (std::size_t k = 0; k < n; ++k)
+                {   const auto& sample = history[history.size() - n + k];
+                    const auto current = sample ? value(*sample) : std::nullopt;
+                    if (!current)
+                    {   previous.reset();
+                        continue;
+                    }
+                    const std::pair<int, int> point{x(k), y(*current)};
+                    if (previous)
+                        c.DrawPointLine
+                        (   previous->first, previous->second
+                        ,   point.first, point.second
+                        ,   color
+                        );
+                    else
+                        c.DrawPoint(point.first, point.second, true, color);
+                    previous = point;
+                }
+            };
+            trace(memory_value, Color::Yellow);
+            trace(load_value, Color::Green);
+        }
+    )
+    |   size(HEIGHT, GREATER_THAN, 15)
+    |   flex
+    ;
+    return hbox
+    (   {   text(" ")
+        ,   std::move(plot)
+        ,   text(" ")
+        }
+    )
+    |   border
+    |   flex
+    ;
+}
+
 inline std::string gpu_memory_string(std::optional<hwinfo::Bytes> memory)
 {   return memory
     ?   std::format("{:.2GiB}", *memory)
@@ -314,9 +405,8 @@ inline ftxui::Element gpu_content
     Elements plots;
     if (has_load && has_memory_load)
         plots.push_back
-        (   gpu_plot_2d
-            (   std::format("{}  |  {}", load_label, memory_label)
-            ,   history, load, memory_load
+        (   gpu_plot_load_n_memory
+            (   load_label, memory_label, history, load, memory_load
             )
         );
     else if (has_load)
