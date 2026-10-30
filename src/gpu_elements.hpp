@@ -78,6 +78,7 @@ ftxui::Element gpu_plot
             }
         }
     )
+    |   size(HEIGHT, GREATER_THAN, 15)
     |   flex
     ;
     return vbox
