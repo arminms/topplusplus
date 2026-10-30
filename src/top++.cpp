@@ -60,14 +60,14 @@ int main()
                     ,   separator()
                     ,   text(" ")
                     ,   gauge(cpu_load->total)
-                    |   color(Color::RGB(198, 160, 246))
+                    |   color(detail::load_color(cpu_load->total))
                     |   bgcolor(Color::RGB(24, 26, 38))
                     |   size(WIDTH, EQUAL, term_width - 18)
                     |   center
                     ,   filler()
                     ,   separator()
                     ,   text(std::format("{:6.1f}% ", cpu_load->total * 100.0))
-                    |   color(Color::RGB(198, 160, 246))
+                    |   color(detail::load_color(cpu_load->total))
                     |   bold
                     })
                 }
