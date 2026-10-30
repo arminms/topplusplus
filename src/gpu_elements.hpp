@@ -20,19 +20,6 @@
 
 namespace detail {
 
-inline const auto plot_background = ftxui::Color::RGB(24, 26, 38);
-
-// Canvas nodes overwrite whole cells, so bgcolor() cannot be used on them;
-// the background has to be set on every cell before anything is drawn.
-inline void paint_background(ftxui::Canvas& c)
-{   for (int y = 0; y < c.height(); y += 4)
-        for (int x = 0; x < c.width(); x += 2)
-            c.Style
-            (   x, y
-            ,   [](ftxui::Cell& cell) { cell.background_color = plot_background; }
-            );
-}
-
 template <typename Value>
 ftxui::Element gpu_plot
 (   std::string title

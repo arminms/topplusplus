@@ -37,6 +37,18 @@ inline std::string core_count_string(hwinfo::Cpu const& cpu)
 
 inline const auto text_color = ftxui::Color::RGB(197, 207, 245);
 inline const auto graph_color = ftxui::Color::RGB(198, 160, 246);
+inline const auto plot_background = ftxui::Color::RGB(24, 26, 38);
+
+// Canvas nodes overwrite whole cells, so bgcolor() cannot be used on them;
+// the background has to be set on every cell before anything is drawn.
+inline void paint_background(ftxui::Canvas& c)
+{   for (int y = 0; y < c.height(); y += 4)
+        for (int x = 0; x < c.width(); x += 2)
+            c.Style
+            (   x, y
+            ,   [](ftxui::Cell& cell) { cell.background_color = plot_background; }
+            );
+}
 
 // Continuous shade from green (0) through yellow and orange to red (1)
 inline ftxui::Color load_color(double load)
@@ -106,7 +118,7 @@ inline ftxui::Element core_cell
             )
         ,   separator()
         ,   std::move(graphic)
-            |   bgcolor(Color::RGB(24, 26, 38))
+            |   bgcolor(plot_background)
             |   size(WIDTH, EQUAL, graph_cols)
             |   center
         }
@@ -198,6 +210,7 @@ ftxui::Elements plot_socket
         const double now = n ? h[h.size() - 1] : 0.0;
         plot_geometry geo{n};
         Canvas c(geo.px_w, geo.px_h);
+        paint_background(c);
         draw(c, geo, h, h.size() - n);
         cells.push_back
         (   core_cell
