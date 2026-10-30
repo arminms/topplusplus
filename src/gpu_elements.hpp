@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <optional>
 #include <string>
@@ -25,33 +26,64 @@ ftxui::Element gpu_plot
 )
 {   using namespace ftxui;
     const std::size_t n = std::min(history.size(), window);
-    plot_geometry geo{n};
-    Canvas c(geo.px_w, geo.px_h);
-    const auto fill = [&](int x, double load)
-    {   c.DrawPointLine(x, geo.y(load), x, geo.px_h - 1, load_color(load));
-    };
+    auto plot = canvas
+    (   [&history, n, value](Canvas& c)
+        {   const int width = c.width();
+            const int height = c.height();
+            if (!width || !height || !n)
+                return;
+            const auto x = [width, n](std::size_t k)
+            {   return width - 1 - static_cast<int>
+                (   std::lround
+                    (   double(n - 1 - k) * (width - 1)
+                    /   (window - 1)
+                    )
+                );
+            };
+            const auto y = [height](double load)
+            {   return static_cast<int>
+                (   std::lround
+                    (   (1.0 - std::clamp(load, 0.0, 1.0)) * (height - 1)
+                    )
+                );
+            };
+            const auto fill = [&](int px, double load)
+            {   c.DrawPointLine(px, y(load), px, height - 1, load_color(load));
+            };
 
-    std::optional<double> previous;
-    int previous_x = 0;
-    for (std::size_t k = 0; k < n; ++k)
-    {   const auto& sample = history[history.size() - n + k];
-        const auto current = sample ? value(*sample) : std::nullopt;
-        const int x = geo.x(k);
-        if (current)
-        {   if (previous)
-                for (int px = previous_x + 1; px <= x; ++px)
-                    fill(px, *previous + (*current - *previous) * (px - previous_x) / (x - previous_x));
-            else
-                fill(x, *current);
+            std::optional<double> previous;
+            int previous_x = 0;
+            for (std::size_t k = 0; k < n; ++k)
+            {   const auto& sample = history[history.size() - n + k];
+                const auto current = sample ? value(*sample) : std::nullopt;
+                const int current_x = x(k);
+                if (current)
+                {   if (previous)
+                    {   const int span = current_x - previous_x;
+                        if (!span)
+                            fill(current_x, *current);
+                        else
+                            for (int px = previous_x + 1; px <= current_x; ++px)
+                                fill
+                                (   px
+                                ,   *previous + (*current - *previous)
+                                    * (px - previous_x) / span
+                                );
+                    }
+                    else
+                        fill(current_x, *current);
+                }
+                previous = current;
+                previous_x = current_x;
+            }
         }
-        previous = current;
-        previous_x = x;
-    }
-
+    )
+    |   flex
+    ;
     return vbox
     (   {   text(std::move(title)) | bold | hcenter
         ,   separator()
-        ,   canvas(std::move(c)) | size(HEIGHT, EQUAL, graph_rows)
+        ,   std::move(plot)
         }
     )
     |   border
