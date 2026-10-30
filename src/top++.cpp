@@ -109,8 +109,9 @@ int main()
             Elements devices;
             for (std::size_t i = 0; i < gpus->size(); ++i)
                 devices.push_back(detail::gpu_content(screen, (*gpus)[i], i, monitors));
-            auto content = vbox(std::move(devices))
-            |   size(WIDTH, LESS_THAN, screen.dimx() > 6 ? screen.dimx() - 6 : 40)
+            const int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
+            auto content = detail::gpu_grid(term_width, std::move(devices))
+            |   size(WIDTH, LESS_THAN, term_width)
             |   color(Color::RGB(126, 133, 163));
             auto scrollable_content = content | scroll_view(gpu_scroll);
             gpu_list->Add(Renderer([scrollable_content] { return scrollable_content; }));
