@@ -69,10 +69,10 @@ ftxui::Elements socket_content_plot
                 if (k)
                     c.DrawPointLine
                     (   geo.x(k - 1), geo.y(h[offset + k - 1]), x, y
-                    ,   detail::graph_color
+                    ,   detail::load_color(h[offset + k])
                     );
                 else
-                    c.DrawPoint(x, y, true, detail::graph_color);
+                    c.DrawPoint(x, y, true, detail::load_color(h[offset + k]));
             }
         }
     );
