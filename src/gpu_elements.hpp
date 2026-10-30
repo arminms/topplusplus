@@ -518,23 +518,43 @@ inline ftxui::Element gpu_content
 
 constexpr int gpu_min_width = 80;
 constexpr int gpu_max_width = 120;
+// The minimum height is the natural height of a box with a plot at the
+// smallest plot size; the plot absorbs any extra height.
+constexpr int gpu_min_height = 24;
+constexpr int gpu_max_height = 40;
 
 // Flows the device boxes into rows: as many per row as fit at the minimum
 // width, each stretched to share the row but never beyond the maximum width,
 // then wraps to the next row. A terminal narrower than the minimum gets one
 // box per row at the available width.
-inline ftxui::Element gpu_grid(int available_width, ftxui::Elements devices)
+// The rows share the available height, each box growing from the minimum
+// height up to the maximum height; when the rows do not fit even at the
+// minimum height, the caller's scroll view takes over.
+inline ftxui::Element gpu_grid
+(   int available_width
+,   int available_height
+,   ftxui::Elements devices
+)
 {   using namespace ftxui;
     const int count = static_cast<int>(devices.size());
     const int columns = std::max
     (   1, std::min(available_width / gpu_min_width, count)
     );
+    const int row_count = (count + columns - 1) / columns;
     const int width = std::min(gpu_max_width, available_width / columns);
+    const int height = std::clamp
+    (   available_height / std::max(1, row_count)
+    ,   gpu_min_height, gpu_max_height
+    );
     Elements rows;
     for (int first = 0; first < count; first += columns)
     {   Elements row;
         for (int i = first; i < std::min(first + columns, count); ++i)
-            row.push_back(std::move(devices[i]) | size(WIDTH, EQUAL, width));
+            row.push_back
+            (   std::move(devices[i])
+            |   size(WIDTH, EQUAL, width)
+            |   size(HEIGHT, EQUAL, height)
+            );
         rows.push_back(hbox(std::move(row)));
     }
     return vbox(std::move(rows));
