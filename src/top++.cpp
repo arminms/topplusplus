@@ -23,7 +23,8 @@ int main()
     const auto virtualization = hwinfo::virtualization();
     const auto cpus = hwinfo::cpus();
     const auto gpus = hwinfo::gpus();
-    monitor monitors;
+    double fps = 0.0, target_fps = 60.0;
+    monitor monitors(static_cast<std::size_t>(target_fps));
     auto screen = App::Fullscreen();
 
     scroll_state scroll;
@@ -152,7 +153,6 @@ int main()
         ,   tab_content,
         }
     );
-    double fps = 0.0;
     // remove GPU tab if no GPUs are detected
     if (gpus && gpus->empty())
     {   tab_entries.erase(tab_entries.begin() + 1);
@@ -246,7 +246,7 @@ int main()
     Loop loop(&screen, scrollable);
     auto fps_window_start = std::chrono::steady_clock::now();
     int frames_since_update = 0;
-    int wait_time_ms = 1000 / 60; // Targeting 60 FPS
+    int wait_time_ms = 1000 / target_fps; // Targeting 60 FPS
     while (!loop.HasQuitted())
     {   // Update the state of the application.
         monitors.tick();
@@ -264,15 +264,15 @@ int main()
         {   fps = frames_since_update / std::chrono::duration<double>(elapsed).count();
             frames_since_update = 0;
             fps_window_start = now;
-            // Adjust wait_time_ms based on the actual FPS to maintain a target of 60 FPS.
-            if (fps < 60.0)
+            // Adjust wait_time_ms based on the actual FPS to maintain the target FPS.
+            if (fps < target_fps)
                 wait_time_ms--;
-            else if (fps > 60.0)
+            else if (fps > target_fps)
                 wait_time_ms++;
             wait_time_ms = std::clamp<int>(wait_time_ms, 1, 50);
         }
 
-        // Sleep for a short duration to control the frame rate (60 FPS).
+        // Sleep for a short duration to control the frame rate.
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time_ms));
     }
 
