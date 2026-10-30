@@ -157,6 +157,18 @@ inline ftxui::Element gpu_content
         :   std::nullopt
         ;
     };
+    const auto has_load = std::any_of
+    (   history.begin(), history.end()
+    ,   [&](const auto& sample)
+        {   return sample && load(*sample).has_value();
+        }
+    );
+    const auto has_memory_load = std::any_of
+    (   history.begin(), history.end()
+    ,   [&](const auto& sample)
+        {   return sample && memory_load(*sample).has_value();
+        }
+    );
     const auto load_label = status && status->utilization
     ?   std::format("GPU load  {:.1f}%", *status->utilization * 100.0)
     :   std::string("GPU load  unavailable")
@@ -170,23 +182,22 @@ inline ftxui::Element gpu_content
     :   std::string("Memory usage  unavailable")
     ;
 
-    auto plots =
-    (   screen.dimx() > 76
-    ?   hbox
-        (   {   gpu_plot(load_label, history, load)
-            ,   gpu_plot(memory_label, history, memory_load)
-            }
-        )
-    :   vbox
-        (   {   gpu_plot(load_label, history, load)
-            ,   gpu_plot(memory_label, history, memory_load)
-            }
-        )
-    )
-    |   flex
-    ;
+    Elements plots;
+    if (has_load)
+        plots.push_back(gpu_plot(load_label, history, load));
+    if (has_memory_load)
+        plots.push_back(gpu_plot(memory_label, history, memory_load));
+    const bool has_plots = !plots.empty();
+    Element plot_content = emptyElement();
+    if (plots.size() == 2)
+        plot_content = screen.dimx() > 76
+        ?   hbox(std::move(plots)) | flex
+        :   vbox(std::move(plots)) | flex
+        ;
+    else if (!plots.empty())
+        plot_content = std::move(plots.front()) | flex;
 
-    return vbox
+    Elements content
     (   {   text(std::format("Device {} - {}", gpu.index, hwinfo::to_string(gpu)))
             |   bold
             |   hcenter
@@ -201,10 +212,14 @@ inline ftxui::Element gpu_content
                 ,   gpu_info_row("Power", power)
                 }
             )
-        ,   separator()
-        ,   std::move(plots)
         }
-    )
+    );
+    if (has_plots)
+    {   content.push_back(separator());
+        content.push_back(std::move(plot_content));
+    }
+
+    return vbox(std::move(content))
     |   border
     |   flex
     ;
