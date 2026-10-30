@@ -229,10 +229,10 @@ ftxui::Element gpu_plot_2d
 }
 
 // Both series as lines in a single canvas: GPU load shaded by load_color and
-// GPU memory usage in yellow. The legends sit in the upper left corner of the
-// canvas, in headroom reserved above the plot area; the load marker and
-// percentage are shaded like the load line. White 0-100 markers on the left
-// give the percentage scale.
+// GPU memory usage in the application's purple graph_color. The legends sit in
+// the upper left corner of the canvas, in headroom reserved above the plot
+// area; the load marker and percentage are shaded like the load line. White
+// 0-100 markers on the left give the percentage scale.
 template <typename LoadValue, typename MemoryValue>
 ftxui::Element gpu_plot_load_n_memory
 (   std::string load_name
@@ -274,7 +274,7 @@ ftxui::Element gpu_plot_load_n_memory
                 );
             else
                 c.DrawText(percent_x, 0, "unavailable");
-            c.DrawText(0, cell_height, "■", Color::Yellow);
+            c.DrawText(0, cell_height, "■", graph_color);
             c.DrawText(4, cell_height, memory_legend);
 
             const auto y = [height](double value)
@@ -357,7 +357,7 @@ ftxui::Element gpu_plot_load_n_memory
                     previous_value = *current;
                 }
             };
-            trace(memory_value, [](double) { return Color(Color::Yellow); });
+            trace(memory_value, [](double) { return graph_color; });
             trace(load_value, [](double load) { return load_color(load); });
         }
     )
