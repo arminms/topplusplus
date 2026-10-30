@@ -54,6 +54,26 @@ TEST_CASE("Monitor saves per-thread CPU load history")
     }
 }
 
+TEST_CASE("Monitor saves per-GPU status history")
+{   monitor monitors{2};
+    REQUIRE(monitors.gpu_history().size() == monitors().gpus.size());
+    for (const auto& history : monitors.gpu_history())
+        REQUIRE(history.size() == 1);
+
+    monitors.tick();
+    monitors.tick();
+    for (const auto& history : monitors.gpu_history())
+        REQUIRE(history.size() == 1);
+
+    monitors.tick();
+    REQUIRE(monitors.gpu_history().size() == monitors().gpus.size());
+    for (std::size_t i = 0; i < monitors.gpu_history().size(); ++i)
+    {   const auto& history = monitors.gpu_history()[i];
+        REQUIRE(history.size() == 2);
+        REQUIRE(history[1].has_value() == monitors().gpus[i].has_value());
+    }
+}
+
 TEST_CASE("Monitor history does not grow before the tick threshold")
 {   monitor monitors{5};
     const auto before = monitors.cpu_history();
