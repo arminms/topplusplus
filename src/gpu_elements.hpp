@@ -100,9 +100,10 @@ ftxui::Element gpu_plot
 }
 
 // Wireframe surface in the style of canvas_animated.cpp's "2D gaussian plot".
-// The mesh spans GPU load (x) and GPU memory usage (y), both in [0, 1]; each
-// sample raises a gaussian peak at its (load, memory) position. The newest
-// sample has full height and older ones fade out with age.
+// The mesh's x axis is time (newest on the right), its y axis is GPU memory
+// usage in [0, 1] and its height is GPU load in [0, 1]: each time step raises
+// a gaussian ridge cross-section at its memory usage with its load as the
+// height, so the history reads as a moving mountain range.
 template <typename LoadValue, typename MemoryValue>
 ftxui::Element gpu_plot_2d
 (   std::string title
@@ -119,69 +120,89 @@ ftxui::Element gpu_plot_2d
             if (width < 2 || height < 2 || !n)
                 return;
 
-            constexpr int grid = 15;
+            constexpr int rows = 15;
             constexpr double peak_width = 0.2;
-            constexpr double oldest_weight = 0.1;
-
-            std::vector<double> surface(grid * grid, 0.0);
-            for (std::size_t k = 0; k < n; ++k)
-            {   const auto& sample = history[history.size() - n + k];
-                const auto load = sample ? load_value(*sample) : std::nullopt;
-                const auto usage = sample ? memory_value(*sample) : std::nullopt;
-                if (!load || !usage)
-                    continue;
-                const double weight = std::pow
-                (   oldest_weight, double(n - 1 - k) / (window - 1)
-                );
-                const double cx = std::clamp(*load, 0.0, 1.0) * (grid - 1);
-                const double cy = std::clamp(*usage, 0.0, 1.0) * (grid - 1);
-                for (int gy = 0; gy < grid; ++gy)
-                    for (int gx = 0; gx < grid; ++gx)
-                    {   const double dx = gx - cx;
-                        const double dy = gy - cy;
-                        auto& z = surface[gy * grid + gx];
-                        z = std::max
-                        (   z
-                        ,   weight * std::exp(-peak_width * (dx * dx + dy * dy))
-                        );
-                    }
-            }
+            constexpr int column_px = 3;
 
             // Oblique projection: x runs right, y runs back (up and sideways)
             const double peak_px = 0.3 * (height - 1);
             const double depth_px = (height - 1) - peak_px;
             const double shear_px = std::min(0.6 * depth_px, 0.4 * (width - 1));
             const double span_px = (width - 1) - shear_px;
-            const auto project = [=](int gx, int gy, double z)
+            const int cols = std::clamp
+            (   static_cast<int>(span_px / column_px), 2, static_cast<int>(window)
+            );
+
+            // One (load, memory) pair per window slot, the newest in the last
+            std::vector<std::optional<std::pair<double, double>>> series(window);
+            for (std::size_t k = 0; k < n; ++k)
+            {   const auto& sample = history[history.size() - n + k];
+                const auto load = sample ? load_value(*sample) : std::nullopt;
+                const auto usage = sample ? memory_value(*sample) : std::nullopt;
+                if (load && usage)
+                    series[window - n + k] = std::pair
+                    {   std::clamp(*load, 0.0, 1.0)
+                    ,   std::clamp(*usage, 0.0, 1.0)
+                    };
+            }
+
+            // Resample the series onto the mesh columns
+            std::vector<double> surface(cols * rows, 0.0);
+            for (int col = 0; col < cols; ++col)
+            {   const double pos = double(col) * (window - 1) / (cols - 1);
+                const auto lo = static_cast<std::size_t>(pos);
+                const auto hi = std::min(lo + 1, window - 1);
+                const double t = pos - lo;
+                const auto& a = series[lo];
+                const auto& b = series[hi];
+                std::optional<std::pair<double, double>> point;
+                if (a && b)
+                    point = std::pair
+                    {   a->first + (b->first - a->first) * t
+                    ,   a->second + (b->second - a->second) * t
+                    };
+                else
+                    point = t < 0.5 ? a : b;
+                if (!point)
+                    continue;
+                const double centre = point->second * (rows - 1);
+                for (int row = 0; row < rows; ++row)
+                {   const double d = row - centre;
+                    surface[row * cols + col]
+                    =   point->first * std::exp(-peak_width * d * d);
+                }
+            }
+
+            const auto project = [=](int col, int row, double z)
             {   return std::pair
                 {   static_cast<int>
                     (   std::lround
-                        (   span_px * gx / (grid - 1)
-                        +   shear_px * gy / (grid - 1)
+                        (   span_px * col / (cols - 1)
+                        +   shear_px * row / (rows - 1)
                         )
                     )
                 ,   static_cast<int>
                     (   std::lround
                         (   (height - 1)
-                        -   depth_px * gy / (grid - 1)
+                        -   depth_px * row / (rows - 1)
                         -   peak_px * z
                         )
                     )
                 };
             };
-            const auto edge = [&](int x0, int y0, int x1, int y1)
-            {   const double z0 = surface[y0 * grid + x0];
-                const double z1 = surface[y1 * grid + x1];
-                const auto [ax, ay] = project(x0, y0, z0);
-                const auto [bx, by] = project(x1, y1, z1);
+            const auto edge = [&](int c0, int r0, int c1, int r1)
+            {   const double z0 = surface[r0 * cols + c0];
+                const double z1 = surface[r1 * cols + c1];
+                const auto [ax, ay] = project(c0, r0, z0);
+                const auto [bx, by] = project(c1, r1, z1);
                 c.DrawPointLine(ax, ay, bx, by, load_color((z0 + z1) / 2));
             };
-            for (int gy = 0; gy < grid; ++gy)
-                for (int gx = 0; gx < grid; ++gx)
-                {   if (gx)
-                        edge(gx - 1, gy, gx, gy);
-                    if (gy)
-                        edge(gx, gy - 1, gx, gy);
+            for (int row = 0; row < rows; ++row)
+                for (int col = 0; col < cols; ++col)
+                {   if (col)
+                        edge(col - 1, row, col, row);
+                    if (row)
+                        edge(col, row - 1, col, row);
                 }
         }
     )
@@ -198,7 +219,7 @@ ftxui::Element gpu_plot_2d
                 }
             )
         |   flex
-        ,   text("x: GPU load  y: memory usage") | dim | hcenter
+        ,   text("x: time  y: memory usage  height: GPU load") | dim | hcenter
         }
     )
     |   border
