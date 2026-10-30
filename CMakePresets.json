@@ -10,7 +10,10 @@
     {
       "name": "default",
       "inherits": "base",
-      "displayName": "Default (no vcpkg)"
+      "displayName": "Default (no vcpkg)",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     },
     {
       "name": "vcpkg",
