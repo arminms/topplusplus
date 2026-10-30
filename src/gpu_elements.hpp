@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <ftxui/ftxui.hpp>
 #include <hwinfo/hwinfo.h>
@@ -98,7 +99,10 @@ ftxui::Element gpu_plot
     ;
 }
 
-// Trajectory plot: GPU load on x, GPU memory usage on y (both in [0, 1]).
+// Wireframe surface in the style of canvas_animated.cpp's "2D gaussian plot".
+// The mesh spans GPU load (x) and GPU memory usage (y), both in [0, 1]; each
+// sample raises a gaussian peak at its (load, memory) position. The newest
+// sample has full height and older ones fade out with age.
 template <typename LoadValue, typename MemoryValue>
 ftxui::Element gpu_plot_2d
 (   std::string title
@@ -112,47 +116,73 @@ ftxui::Element gpu_plot_2d
     (   [&history, n, load_value, memory_value](Canvas& c)
         {   const int width = c.width();
             const int height = c.height();
-            if (!width || !height || !n)
+            if (width < 2 || height < 2 || !n)
                 return;
-            const auto px = [width](double load)
-            {   return static_cast<int>
-                (   std::lround(std::clamp(load, 0.0, 1.0) * (width - 1))
-                );
-            };
-            const auto py = [height](double usage)
-            {   return static_cast<int>
-                (   std::lround
-                    (   (1.0 - std::clamp(usage, 0.0, 1.0)) * (height - 1)
-                    )
-                );
-            };
 
-            std::optional<std::pair<int, int>> previous;
+            constexpr int grid = 15;
+            constexpr double peak_width = 0.2;
+            constexpr double oldest_weight = 0.1;
+
+            std::vector<double> surface(grid * grid, 0.0);
             for (std::size_t k = 0; k < n; ++k)
             {   const auto& sample = history[history.size() - n + k];
                 const auto load = sample ? load_value(*sample) : std::nullopt;
                 const auto usage = sample ? memory_value(*sample) : std::nullopt;
                 if (!load || !usage)
-                {   previous.reset();
                     continue;
-                }
-                const std::pair<int, int> current{px(*load), py(*usage)};
-                const auto shade = load_color(std::max(*load, *usage));
-                if (previous)
-                    c.DrawPointLine
-                    (   previous->first, previous->second
-                    ,   current.first, current.second
-                    ,   shade
-                    );
-                else
-                    c.DrawPoint(current.first, current.second, true, shade);
-                previous = current;
-            }
-            // Highlight the most recent sample
-            if (previous)
-                c.DrawPointCircleFilled
-                (   previous->first, previous->second, 1, Color::White
+                const double weight = std::pow
+                (   oldest_weight, double(n - 1 - k) / (window - 1)
                 );
+                const double cx = std::clamp(*load, 0.0, 1.0) * (grid - 1);
+                const double cy = std::clamp(*usage, 0.0, 1.0) * (grid - 1);
+                for (int gy = 0; gy < grid; ++gy)
+                    for (int gx = 0; gx < grid; ++gx)
+                    {   const double dx = gx - cx;
+                        const double dy = gy - cy;
+                        auto& z = surface[gy * grid + gx];
+                        z = std::max
+                        (   z
+                        ,   weight * std::exp(-peak_width * (dx * dx + dy * dy))
+                        );
+                    }
+            }
+
+            // Oblique projection: x runs right, y runs back (up and sideways)
+            const double peak_px = 0.3 * (height - 1);
+            const double depth_px = (height - 1) - peak_px;
+            const double shear_px = std::min(0.6 * depth_px, 0.4 * (width - 1));
+            const double span_px = (width - 1) - shear_px;
+            const auto project = [=](int gx, int gy, double z)
+            {   return std::pair
+                {   static_cast<int>
+                    (   std::lround
+                        (   span_px * gx / (grid - 1)
+                        +   shear_px * gy / (grid - 1)
+                        )
+                    )
+                ,   static_cast<int>
+                    (   std::lround
+                        (   (height - 1)
+                        -   depth_px * gy / (grid - 1)
+                        -   peak_px * z
+                        )
+                    )
+                };
+            };
+            const auto edge = [&](int x0, int y0, int x1, int y1)
+            {   const double z0 = surface[y0 * grid + x0];
+                const double z1 = surface[y1 * grid + x1];
+                const auto [ax, ay] = project(x0, y0, z0);
+                const auto [bx, by] = project(x1, y1, z1);
+                c.DrawPointLine(ax, ay, bx, by, load_color((z0 + z1) / 2));
+            };
+            for (int gy = 0; gy < grid; ++gy)
+                for (int gx = 0; gx < grid; ++gx)
+                {   if (gx)
+                        edge(gx - 1, gy, gx, gy);
+                    if (gy)
+                        edge(gx, gy - 1, gx, gy);
+                }
         }
     )
     |   size(HEIGHT, GREATER_THAN, 15)
