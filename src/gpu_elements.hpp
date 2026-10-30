@@ -230,11 +230,11 @@ ftxui::Element gpu_plot_2d
 
 // Both series as lines in a single canvas: GPU load shaded by load_color and
 // GPU memory usage in yellow. The legends sit in the upper left corner of the
-// canvas, in headroom reserved above the plot area; the load percentage is
-// shaded like the load line.
+// canvas, in headroom reserved above the plot area; the load marker and
+// percentage are shaded like the load line.
 template <typename LoadValue, typename MemoryValue>
 ftxui::Element gpu_plot_load_n_memory
-(   std::string load_label
+(   std::string load_name
 ,   std::optional<double> current_load
 ,   std::string memory_legend
 ,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
@@ -245,7 +245,7 @@ ftxui::Element gpu_plot_load_n_memory
     const std::size_t n = std::min(history.size(), window);
     auto plot = canvas
     (   [   &history, n, load_value, memory_value, current_load
-        ,   load_label = std::move(load_label)
+        ,   load_name = std::move(load_name)
         ,   memory_legend = std::move(memory_legend)
         ]
         (Canvas& c)
@@ -257,9 +257,12 @@ ftxui::Element gpu_plot_load_n_memory
             if (width < 2 || height <= top + 1)
                 return;
 
-            c.DrawText(0, 0, "■", Color::Green);
-            c.DrawText(4, 0, load_label);
-            const int percent_x = 4 + 2 * (string_width(load_label) + 2);
+            c.DrawText
+            (   0, 0, "■"
+            ,   current_load ? load_color(*current_load) : Color::Default
+            );
+            c.DrawText(4, 0, load_name);
+            const int percent_x = 4 + 2 * (string_width(load_name) + 1);
             if (current_load)
                 c.DrawText
                 (   percent_x, 0
@@ -423,24 +426,27 @@ inline ftxui::Element gpu_content
         {   return sample && memory_load(*sample).has_value();
         }
     );
+    const auto load_name = std::format("GPU{} %", gpu.index);
+    const auto memory_name = std::format("GPU{} mem%", gpu.index);
     const auto load_label = status && status->utilization
-    ?   std::format("GPU load  {:.1f}%", *status->utilization * 100.0)
-    :   std::string("GPU load  unavailable")
+    ?   std::format("{} {:.1f}%", load_name, *status->utilization * 100.0)
+    :   std::format("{} unavailable", load_name)
     ;
     const auto memory_label = used_memory && total_memory && total_memory->value
     ?   std::format
-        (   "Memory usage  {:.1f}%"
+        (   "{} {:.1f}%"
+        ,   memory_name
         ,   100.0 * static_cast<double>(used_memory->value)
             / static_cast<double>(total_memory->value)
         )
-    :   std::string("Memory usage  unavailable")
+    :   std::format("{} unavailable", memory_name)
     ;
 
     Elements plots;
     if (has_load && has_memory_load)
         plots.push_back
         (   gpu_plot_load_n_memory
-            (   "GPU load"
+            (   std::format("{:<{}}", load_name, memory_name.size())
             ,   status ? status->utilization : std::nullopt
             ,   memory_label, history, load, memory_load
             )
