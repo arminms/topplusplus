@@ -20,6 +20,19 @@
 
 namespace detail {
 
+inline const auto plot_background = ftxui::Color::RGB(24, 26, 38);
+
+// Canvas nodes overwrite whole cells, so bgcolor() cannot be used on them;
+// the background has to be set on every cell before anything is drawn.
+inline void paint_background(ftxui::Canvas& c)
+{   for (int y = 0; y < c.height(); y += 4)
+        for (int x = 0; x < c.width(); x += 2)
+            c.Style
+            (   x, y
+            ,   [](ftxui::Cell& cell) { cell.background_color = plot_background; }
+            );
+}
+
 template <typename Value>
 ftxui::Element gpu_plot
 (   std::string title
@@ -30,7 +43,8 @@ ftxui::Element gpu_plot
     const std::size_t n = std::min(history.size(), window);
     auto plot = canvas
     (   [&history, n, value](Canvas& c)
-        {   const int width = c.width();
+        {   paint_background(c);
+            const int width = c.width();
             const int height = c.height();
             if (!width || !height || !n)
                 return;
@@ -116,7 +130,8 @@ ftxui::Element gpu_plot_2d
     const std::size_t n = std::min(history.size(), window);
     auto plot = canvas
     (   [&history, n, load_value, memory_value](Canvas& c)
-        {   const int width = c.width();
+        {   paint_background(c);
+            const int width = c.width();
             const int height = c.height();
             if (width < 2 || height < 2 || !n)
                 return;
@@ -250,7 +265,8 @@ ftxui::Element gpu_plot_load_n_memory
         ,   memory_legend = std::move(memory_legend)
         ]
         (Canvas& c)
-        {   constexpr int legend_rows = 2;
+        {   paint_background(c);
+            constexpr int legend_rows = 2;
             constexpr int cell_height = 4;
             constexpr int top = legend_rows * cell_height;
             // Room for the widest percentage marker ("100") and a gap
