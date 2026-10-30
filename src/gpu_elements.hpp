@@ -83,7 +83,13 @@ ftxui::Element gpu_plot
     return vbox
     (   {   text(std::move(title)) | bold | hcenter
         ,   separator()
-        ,   std::move(plot)
+        ,   hbox
+            (   {   text(" ")
+                ,   std::move(plot)
+                ,   text(" ")
+                }
+            )
+        |   flex
         }
     )
     |   border
@@ -163,7 +169,8 @@ inline ftxui::Element gpu_content
     :   std::string("Memory usage  unavailable")
     ;
 
-    auto plots = screen.dimx() > 76
+    auto plots =
+    (   screen.dimx() > 76
     ?   hbox
         (   {   gpu_plot(load_label, history, load)
             ,   gpu_plot(memory_label, history, memory_load)
@@ -174,6 +181,8 @@ inline ftxui::Element gpu_content
             ,   gpu_plot(memory_label, history, memory_load)
             }
         )
+    )
+    |   flex
     ;
 
     return vbox
