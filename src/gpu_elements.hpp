@@ -98,6 +98,84 @@ ftxui::Element gpu_plot
     ;
 }
 
+// Trajectory plot: GPU load on x, GPU memory usage on y (both in [0, 1]).
+template <typename LoadValue, typename MemoryValue>
+ftxui::Element gpu_plot_2d
+(   std::string title
+,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
+,   LoadValue load_value
+,   MemoryValue memory_value
+)
+{   using namespace ftxui;
+    const std::size_t n = std::min(history.size(), window);
+    auto plot = canvas
+    (   [&history, n, load_value, memory_value](Canvas& c)
+        {   const int width = c.width();
+            const int height = c.height();
+            if (!width || !height || !n)
+                return;
+            const auto px = [width](double load)
+            {   return static_cast<int>
+                (   std::lround(std::clamp(load, 0.0, 1.0) * (width - 1))
+                );
+            };
+            const auto py = [height](double usage)
+            {   return static_cast<int>
+                (   std::lround
+                    (   (1.0 - std::clamp(usage, 0.0, 1.0)) * (height - 1)
+                    )
+                );
+            };
+
+            std::optional<std::pair<int, int>> previous;
+            for (std::size_t k = 0; k < n; ++k)
+            {   const auto& sample = history[history.size() - n + k];
+                const auto load = sample ? load_value(*sample) : std::nullopt;
+                const auto usage = sample ? memory_value(*sample) : std::nullopt;
+                if (!load || !usage)
+                {   previous.reset();
+                    continue;
+                }
+                const std::pair<int, int> current{px(*load), py(*usage)};
+                const auto shade = load_color(std::max(*load, *usage));
+                if (previous)
+                    c.DrawPointLine
+                    (   previous->first, previous->second
+                    ,   current.first, current.second
+                    ,   shade
+                    );
+                else
+                    c.DrawPoint(current.first, current.second, true, shade);
+                previous = current;
+            }
+            // Highlight the most recent sample
+            if (previous)
+                c.DrawPointCircleFilled
+                (   previous->first, previous->second, 1, Color::White
+                );
+        }
+    )
+    |   size(HEIGHT, GREATER_THAN, 15)
+    |   flex
+    ;
+    return vbox
+    (   {   text(std::move(title)) | bold | hcenter
+        ,   separator()
+        ,   hbox
+            (   {   text(" ")
+                ,   std::move(plot)
+                ,   text(" ")
+                }
+            )
+        |   flex
+        ,   text("x: GPU load  y: memory usage") | dim | hcenter
+        }
+    )
+    |   border
+    |   flex
+    ;
+}
+
 inline std::string gpu_memory_string(std::optional<hwinfo::Bytes> memory)
 {   return memory
     ?   std::format("{:.2GiB}", *memory)
@@ -183,9 +261,16 @@ inline ftxui::Element gpu_content
     ;
 
     Elements plots;
-    if (has_load)
+    if (has_load && has_memory_load)
+        plots.push_back
+        (   gpu_plot_2d
+            (   std::format("{}  |  {}", load_label, memory_label)
+            ,   history, load, memory_load
+            )
+        );
+    else if (has_load)
         plots.push_back(gpu_plot(load_label, history, load));
-    if (has_memory_load)
+    else if (has_memory_load)
         plots.push_back(gpu_plot(memory_label, history, memory_load));
     const bool has_plots = !plots.empty();
     Element plot_content = emptyElement();
