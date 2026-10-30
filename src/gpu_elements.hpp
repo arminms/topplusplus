@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <format>
 #include <optional>
 #include <string>
@@ -227,12 +228,14 @@ ftxui::Element gpu_plot_2d
     ;
 }
 
-// Both series as lines in a single canvas: GPU load in green and GPU memory
-// usage in yellow. The legends sit in the upper left corner of the canvas, in
-// headroom reserved above the plot area.
+// Both series as lines in a single canvas: GPU load shaded by load_color and
+// GPU memory usage in yellow. The legends sit in the upper left corner of the
+// canvas, in headroom reserved above the plot area; the load percentage is
+// shaded like the load line.
 template <typename LoadValue, typename MemoryValue>
 ftxui::Element gpu_plot_load_n_memory
-(   std::string load_legend
+(   std::string load_label
+,   std::optional<double> current_load
 ,   std::string memory_legend
 ,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
 ,   LoadValue load_value
@@ -241,8 +244,8 @@ ftxui::Element gpu_plot_load_n_memory
 {   using namespace ftxui;
     const std::size_t n = std::min(history.size(), window);
     auto plot = canvas
-    (   [   &history, n, load_value, memory_value
-        ,   load_legend = std::move(load_legend)
+    (   [   &history, n, load_value, memory_value, current_load
+        ,   load_label = std::move(load_label)
         ,   memory_legend = std::move(memory_legend)
         ]
         (Canvas& c)
@@ -254,12 +257,19 @@ ftxui::Element gpu_plot_load_n_memory
             if (width < 2 || height <= top + 1)
                 return;
 
-            const auto legend = [&c](int row, Color color, std::string const& label)
-            {   c.DrawText(0, row * cell_height, "■", color);
-                c.DrawText(4, row * cell_height, label);
-            };
-            legend(0, Color::Green, load_legend);
-            legend(1, Color::Yellow, memory_legend);
+            c.DrawText(0, 0, "■", Color::Green);
+            c.DrawText(4, 0, load_label);
+            const int percent_x = 4 + 2 * (string_width(load_label) + 2);
+            if (current_load)
+                c.DrawText
+                (   percent_x, 0
+                ,   std::format("{:.1f}%", *current_load * 100.0)
+                ,   load_color(*current_load)
+                );
+            else
+                c.DrawText(percent_x, 0, "unavailable");
+            c.DrawText(0, cell_height, "■", Color::Yellow);
+            c.DrawText(4, cell_height, memory_legend);
 
             if (!n)
                 return;
@@ -279,8 +289,11 @@ ftxui::Element gpu_plot_load_n_memory
                     )
                 );
             };
-            const auto trace = [&](auto const& value, Color color)
+            // Segments are split into one-pixel pieces so that the shade
+            // follows the value along steep slopes
+            const auto trace = [&](auto const& value, auto const& shade)
             {   std::optional<std::pair<int, int>> previous;
+                double previous_value = 0.0;
                 for (std::size_t k = 0; k < n; ++k)
                 {   const auto& sample = history[history.size() - n + k];
                     const auto current = sample ? value(*sample) : std::nullopt;
@@ -290,18 +303,39 @@ ftxui::Element gpu_plot_load_n_memory
                     }
                     const std::pair<int, int> point{x(k), y(*current)};
                     if (previous)
-                        c.DrawPointLine
-                        (   previous->first, previous->second
-                        ,   point.first, point.second
-                        ,   color
-                        );
+                    {   const int dx = point.first - previous->first;
+                        const int dy = point.second - previous->second;
+                        const int steps
+                        =   std::max({std::abs(dx), std::abs(dy), 1});
+                        const auto at = [&](int i)
+                        {   return std::pair
+                            {   previous->first
+                                + static_cast<int>(std::lround(double(dx) * i / steps))
+                            ,   previous->second
+                                + static_cast<int>(std::lround(double(dy) * i / steps))
+                            };
+                        };
+                        for (int i = 0; i < steps; ++i)
+                        {   const auto from = at(i);
+                            const auto to = at(i + 1);
+                            c.DrawPointLine
+                            (   from.first, from.second, to.first, to.second
+                            ,   shade
+                                (   previous_value
+                                    + (*current - previous_value)
+                                    * (i + 0.5) / steps
+                                )
+                            );
+                        }
+                    }
                     else
-                        c.DrawPoint(point.first, point.second, true, color);
+                        c.DrawPoint(point.first, point.second, true, shade(*current));
                     previous = point;
+                    previous_value = *current;
                 }
             };
-            trace(memory_value, Color::Yellow);
-            trace(load_value, Color::Green);
+            trace(memory_value, [](double) { return Color(Color::Yellow); });
+            trace(load_value, [](double load) { return load_color(load); });
         }
     )
     |   size(HEIGHT, GREATER_THAN, 15)
@@ -406,7 +440,9 @@ inline ftxui::Element gpu_content
     if (has_load && has_memory_load)
         plots.push_back
         (   gpu_plot_load_n_memory
-            (   load_label, memory_label, history, load, memory_load
+            (   "GPU load"
+            ,   status ? status->utilization : std::nullopt
+            ,   memory_label, history, load, memory_load
             )
         );
     else if (has_load)
