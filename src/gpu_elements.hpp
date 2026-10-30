@@ -231,7 +231,8 @@ ftxui::Element gpu_plot_2d
 // Both series as lines in a single canvas: GPU load shaded by load_color and
 // GPU memory usage in yellow. The legends sit in the upper left corner of the
 // canvas, in headroom reserved above the plot area; the load marker and
-// percentage are shaded like the load line.
+// percentage are shaded like the load line. White 0-100 markers on the left
+// give the percentage scale.
 template <typename LoadValue, typename MemoryValue>
 ftxui::Element gpu_plot_load_n_memory
 (   std::string load_name
@@ -252,9 +253,11 @@ ftxui::Element gpu_plot_load_n_memory
         {   constexpr int legend_rows = 2;
             constexpr int cell_height = 4;
             constexpr int top = legend_rows * cell_height;
+            // Room for the widest percentage marker ("100") and a gap
+            constexpr int axis_px = 2 * 4;
             const int width = c.width();
             const int height = c.height();
-            if (width < 2 || height <= top + 1)
+            if (width <= axis_px + 1 || height <= top + 1)
                 return;
 
             c.DrawText
@@ -274,21 +277,38 @@ ftxui::Element gpu_plot_load_n_memory
             c.DrawText(0, cell_height, "■", Color::Yellow);
             c.DrawText(4, cell_height, memory_legend);
 
-            if (!n)
-                return;
-            const auto x = [width, n](std::size_t k)
-            {   return width - 1 - static_cast<int>
-                (   std::lround
-                    (   double(n - 1 - k) * (width - 1)
-                    /   (window - 1)
-                    )
-                );
-            };
             const auto y = [height](double value)
             {   return top + static_cast<int>
                 (   std::lround
                     (   (1.0 - std::clamp(value, 0.0, 1.0))
                     *   (height - 1 - top)
+                    )
+                );
+            };
+            // Percentage markers, right-aligned in the column left of the plot
+            int previous_row = -1;
+            for (const int percent : {100, 75, 50, 25, 0})
+            {   const int row = y(percent / 100.0) / cell_height;
+                if (row == previous_row)
+                    continue;
+                previous_row = row;
+                const auto marker = std::to_string(percent);
+                c.DrawText
+                (   2 * (3 - static_cast<int>(marker.size()))
+                ,   row * cell_height
+                ,   marker
+                ,   Color::White
+                );
+            }
+
+            if (!n)
+                return;
+            const int plot_width = width - axis_px;
+            const auto x = [width, plot_width, n](std::size_t k)
+            {   return width - 1 - static_cast<int>
+                (   std::lround
+                    (   double(n - 1 - k) * (plot_width - 1)
+                    /   (window - 1)
                     )
                 );
             };
