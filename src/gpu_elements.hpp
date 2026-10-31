@@ -20,6 +20,8 @@
 
 namespace detail {
 
+inline const auto plot_border_color = ftxui::Color::RGB(126, 133, 163);
+
 template <typename Value>
 ftxui::Element gpu_plot
 (   std::string title
@@ -96,7 +98,7 @@ ftxui::Element gpu_plot
         |   flex
         }
     )
-    |   border
+    |   borderStyled(plot_border_color)
     |   flex
     ;
 }
@@ -225,7 +227,7 @@ ftxui::Element gpu_plot_2d
         ,   text("x: time  y: memory usage  height: GPU load") | dim | hcenter
         }
     )
-    |   border
+    |   borderStyled(plot_border_color)
     |   flex
     ;
 }
@@ -373,7 +375,7 @@ ftxui::Element gpu_plot_load_n_memory
         ,   text(" ")
         }
     )
-    |   border
+    |   borderStyled(plot_border_color)
     |   flex
     ;
 }
@@ -388,7 +390,9 @@ inline std::string gpu_memory_string(std::optional<hwinfo::Bytes> memory)
 inline ftxui::Element gpu_info_row(std::string label, std::string value)
 {   using namespace ftxui;
     return hbox
-    (   {   text(std::move(label)) | dim | size(WIDTH, EQUAL, 16)
+    (   {   text(std::move(label))
+        |   dim
+        |   size(WIDTH, EQUAL, 16)
         ,   separator()
         ,   text(std::format(" {}", value))
         }
@@ -414,6 +418,26 @@ inline ftxui::Element gpu_content
     :   gpu.dedicated_memory ? gpu.dedicated_memory : gpu.shared_memory
     ;
     const auto used_memory = status ? status->memory_used : std::nullopt;
+    const auto pcie_link = status && status->pcie_link
+    ?   hwinfo::to_string(*status->pcie_link)
+    :   std::string("Unavailable")
+    ;
+    const auto frequency = status && status->frequency
+    ?   std::format("{:.0MHz}", *status->frequency)
+    :   std::string("Unavailable")
+    ;
+    const auto memory_frequency = status && status->memory_frequency
+    ?   std::format("{:.0MHz}", *status->memory_frequency)
+    :   std::string("Unavailable")
+    ;
+    const auto temperature = status && status->temperature
+    ?   std::format("{:.0f} °C", *status->temperature)
+    :   std::string("Unavailable")
+    ;
+    const auto fan_speed = status && status->fan_speed
+    ?   std::format("{:.0f}%", *status->fan_speed * 100.0)
+    :   std::string("Unavailable")
+    ;
     const auto power = status && status->power
     ?   std::format("{:.1W}", *status->power)
     :   std::string("Unavailable")
@@ -495,12 +519,27 @@ inline ftxui::Element gpu_content
         ,   separator()
         ,   vbox
             (   {   hbox
-                    (   {   gpu_info_row("Total memory", gpu_memory_string(total_memory))
-                        ,   filler()
-                        ,   gpu_info_row("Used memory", gpu_memory_string(used_memory))
-                        }
+                    (   hbox
+                        (   {   text(" Memory")
+                            |   dim
+                            |   size(WIDTH, EQUAL, 16)
+                            ,   separator()
+                            ,   text
+                                (   std::format
+                                    (   " {}/{}"
+                                    ,   gpu_memory_string(used_memory)
+                                    ,   gpu_memory_string(total_memory)
+                                    )
+                                )
+                            }
+                        )
                     )
-                ,   gpu_info_row("Power", power)
+                ,   gpu_info_row(" PCIe Link", pcie_link)
+                ,   gpu_info_row(" Frequency", frequency)
+                ,   gpu_info_row(" Memory Freq.", memory_frequency)
+                ,   gpu_info_row(" Temperature", temperature)
+                ,   gpu_info_row(" Fan Speed", fan_speed)
+                ,   gpu_info_row(" Power", power)
                 }
             )
         }
@@ -512,6 +551,7 @@ inline ftxui::Element gpu_content
 
     return vbox(std::move(content))
     |   border
+    |   color(Color::RGB(197, 207, 245))
     |   flex
     ;
 }
@@ -520,7 +560,7 @@ constexpr int gpu_min_width = 80;
 constexpr int gpu_max_width = 120;
 // The minimum height is the natural height of a box with a plot at the
 // smallest plot size; the plot absorbs any extra height.
-constexpr int gpu_min_height = 24;
+constexpr int gpu_min_height = 29;
 constexpr int gpu_max_height = 40;
 
 // Flows the device boxes into rows: as many per row as fit at the minimum
