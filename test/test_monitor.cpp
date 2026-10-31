@@ -74,6 +74,42 @@ TEST_CASE("Monitor saves per-GPU status history")
     }
 }
 
+TEST_CASE("Monitor captures memory usage")
+{   monitor monitors{2};
+    const auto& memory = monitors().memory;
+
+    REQUIRE((memory.has_value() || memory.error().code() != std::error_code{}));
+    if (memory)
+    {   REQUIRE(memory->total.value > 0);
+        REQUIRE(memory->available.value <= memory->total.value);
+    }
+}
+
+TEST_CASE("Monitor saves memory usage history")
+{   monitor monitors{2};
+    REQUIRE(monitors.memory_history().size() == 1);
+
+    monitors.tick();
+    monitors.tick();
+    REQUIRE(monitors.memory_history().size() == 1);
+
+    monitors.tick();
+    const auto& history = monitors.memory_history();
+    REQUIRE(history.size() == 2);
+    REQUIRE(history[1].has_value() == monitors().memory.has_value());
+    if (history[1])
+        REQUIRE(history[1]->total == monitors().memory->total);
+}
+
+TEST_CASE("Monitor memory history is capped at the buffer capacity")
+{   monitor monitors{0};
+    for (int i = 0; i < 100; ++i)
+        monitors.tick();
+
+    REQUIRE(monitors.memory_history().full());
+    REQUIRE(monitors.memory_history().size() == monitors.memory_history().capacity());
+}
+
 TEST_CASE("Monitor history does not grow before the tick threshold")
 {   monitor monitors{5};
     const auto before = monitors.cpu_history();

@@ -15,7 +15,7 @@ struct monitor
     {   hwinfo::result<hwinfo::CpuLoad> cpu;
         hwinfo::result<std::vector<hwinfo::Hertz>> frequencies;
         std::vector<hwinfo::result<hwinfo::GpuStatus>> gpus;
-        // hwinfo::result<hwinfo::MemoryUsage> memory;
+        hwinfo::result<hwinfo::MemoryUsage> memory;
         // std::vector<std::pair<std::filesystem::path, hwinfo::result<hwinfo::DiskSpace>>> disks;
     };
 
@@ -54,10 +54,16 @@ struct monitor
     {   return gpu_history_;
     }
 
+    // Memory usage history, oldest sample first.
+    const circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>>& memory_history() const
+    {   return memory_history_;
+    }
+
     snapshot take_snapshot()
     {   snapshot current
         {   .cpu = cpu_sampler_->sample()
         ,   .frequencies = hwinfo::cpu_frequencies()
+        ,   .memory = hwinfo::memory_usage()
         };
         for (auto& sampler : gpu_samplers)
             current.gpus.push_back(sampler.sample());
@@ -78,6 +84,8 @@ private:
             gpu_history_.resize(last_snapshot_.gpus.size());
         for (std::size_t i = 0; i < last_snapshot_.gpus.size(); ++i)
             gpu_history_[i].push(last_snapshot_.gpus[i]);
+
+        memory_history_.push(last_snapshot_.memory);
     }
 
     std::size_t tick_max_;
@@ -87,4 +95,5 @@ private:
     snapshot last_snapshot_;
     std::vector<circular_buffer_64<double>> cpu_history_;
     std::vector<circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>>> gpu_history_;
+    circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>> memory_history_;
 };
