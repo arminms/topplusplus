@@ -42,6 +42,8 @@ find_package(
 )
 if(NOT ftxui_FOUND)
     message(STATUS "Fetching ftxui library...")
+    # ftxui is linked statically, so there is nothing of it to install
+    set(FTXUI_ENABLE_INSTALL OFF)
     FetchContent_Declare(
       ftxui
       GIT_REPOSITORY https://github.com/ArthurSonzogni/ftxui
@@ -76,3 +78,16 @@ endif()
 add_executable(top++ src/top++.cpp)
 target_link_libraries(top++ PRIVATE ftxui::ftxui lfreist-hwinfo::hwinfo)
 target_compile_features(top++ INTERFACE cxx_std_23)
+
+## installation
+#
+# The hwinfo libraries are often installed outside the default linker search
+# path (e.g. ~/.local/lib), so keep their directories in the installed RPATH.
+# $ORIGIN/../lib covers shared libraries installed next to top++ itself.
+set_target_properties(
+  top++ PROPERTIES
+  INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}"
+  INSTALL_RPATH_USE_LINK_PATH TRUE
+)
+install(TARGETS top++ RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES LICENSE README.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
