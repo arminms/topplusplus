@@ -63,7 +63,7 @@ int main()
             ;
             auto cpu_load_plot = detail::cpu_load_n_memory_plot
             (   cpu_load ? std::optional<double>(cpu_load->total) : std::nullopt
-            ,   detail::system_memory_load(memory)
+            ,   memory
             ,   monitors.cpu_total_history()
             ,   monitors.memory_history()
             );

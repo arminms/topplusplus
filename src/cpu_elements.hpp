@@ -31,13 +31,13 @@ inline std::optional<double> system_memory_load
 
 ftxui::Element cpu_load_n_memory_plot
 (   std::optional<double> current_load
-,   std::optional<double> current_memory_load
+,   hwinfo::result<hwinfo::MemoryUsage> const& memory
 ,   circular_buffer_64<std::optional<double>> const& load_history
 ,   circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>> const& memory_history
 )
 {   using namespace ftxui;
     auto plot = canvas
-    (   [&load_history, &memory_history, current_load, current_memory_load]
+    (   [&load_history, &memory_history, current_load, memory]
         (Canvas& c)
         {   paint_background(c);
             constexpr int legend_rows = 2;
@@ -72,8 +72,17 @@ ftxui::Element cpu_load_n_memory_plot
 
             c.DrawText(0, cell_height, "■", graph_color);
             c.DrawText(4, cell_height, "RAM");
-            if (current_memory_load)
-                draw_percent(cell_height, *current_memory_load, graph_color);
+            if (const auto memory_load = system_memory_load(memory))
+            {   draw_percent(cell_height, *memory_load, graph_color);
+                const hwinfo::Bytes used
+                {   memory->total.value - memory->available.value
+                };
+                c.DrawText
+                (   load_percent_x + 2 * (percent_cells + 1), cell_height
+                ,   std::format("({:.1GiB}/{:.1GiB})", used, memory->total)
+                ,   Color::White
+                );
+            }
             else
                 c.DrawText(load_percent_x, cell_height, "unavailable");
 
