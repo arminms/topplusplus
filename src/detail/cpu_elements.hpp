@@ -9,7 +9,11 @@
 #include <iterator>
 #include <format>
 #include <string>
+#include <memory>
+#include <utility>
 #include <vector>
+
+#include <ftxui/dom/node.hpp>
 
 namespace detail {
 
@@ -37,6 +41,7 @@ inline std::string core_count_string(hwinfo::Cpu const& cpu)
 
 inline const auto text_color = ftxui::Color::RGB(197, 207, 245);
 inline const auto graph_color = ftxui::Color::RGB(198, 160, 246);
+inline const auto plot_border_color = ftxui::Color::RGB(126, 133, 163);
 inline const auto plot_background = ftxui::Color::RGB(24, 26, 38);
 
 // Canvas nodes overwrite whole cells, so bgcolor() cannot be used on them;
@@ -229,6 +234,64 @@ ftxui::Elements plot_socket
         )
     |   bold
     ,   cell_grid(screen, cells)
+    );
+}
+
+// FTXUI can neither cap how far a flexible element grows nor keep it from
+// shrinking below its minimum, so the height bounds of the plot are applied
+// here: the plot gets as many rows as available between min_height and
+// max_height and the rest is given to the element below it.
+inline constexpr int plot_min_height = 10;
+inline constexpr int plot_max_height = 15;
+
+class plot_over_node : public ftxui::Node
+{   public:
+        plot_over_node
+        (   ftxui::Element plot, ftxui::Element rest
+        ,   int min_height, int max_height
+        )
+        :   Node(ftxui::Elements{std::move(plot), std::move(rest)})
+        ,   min_height_(min_height)
+        ,   max_height_(max_height)
+        {}
+        void ComputeRequirement() override
+        {   Node::ComputeRequirement();
+            const auto& plot = children_[0]->requirement();
+            const auto& rest = children_[1]->requirement();
+            requirement_.min_x = std::max(plot.min_x, rest.min_x);
+            requirement_.min_y = min_height_ + rest.min_y;
+            requirement_.flex_grow_x
+            =   std::max(plot.flex_grow_x, rest.flex_grow_x);
+            requirement_.flex_grow_y = 1;
+            requirement_.flex_shrink_x
+            =   std::max(plot.flex_shrink_x, rest.flex_shrink_x);
+            requirement_.flex_shrink_y = 1;
+        }
+        void SetBox(ftxui::Box box) override
+        {   Node::SetBox(box);
+            const int height = box.y_max - box.y_min + 1;
+            const int plot_height = std::min
+            (   std::clamp
+                (   height - children_[1]->requirement().min_y
+                ,   min_height_, max_height_
+                )
+            ,   height
+            );
+            ftxui::Box plot_box = box;
+            plot_box.y_max = box.y_min + plot_height - 1;
+            ftxui::Box rest_box = box;
+            rest_box.y_min = plot_box.y_max + 1;
+            children_[0]->SetBox(plot_box);
+            children_[1]->SetBox(rest_box);
+        }
+    private:
+        int min_height_;
+        int max_height_;
+};
+
+inline ftxui::Element plot_over(ftxui::Element plot, ftxui::Element rest)
+{   return std::make_shared<plot_over_node>
+    (   std::move(plot), std::move(rest), plot_min_height, plot_max_height
     );
 }
 
