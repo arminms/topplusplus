@@ -20,8 +20,6 @@
 
 namespace detail {
 
-inline const auto plot_border_color = ftxui::Color::RGB(126, 133, 163);
-
 template <typename Value>
 ftxui::Element gpu_plot
 (   std::string title
