@@ -6,6 +6,7 @@
 #include <limits>
 #include <format>
 #include <memory>
+#include <optional>
 
 #include "monitor.hpp"
 #include "cpu_elements.hpp"
@@ -34,6 +35,7 @@ int main()
     (   [&screen, &cpus, &monitors, &cpu_scroll]
         {   const auto& cpu = cpus->front();
             const auto& cpu_load = monitors().cpu;
+            const auto& memory = monitors().memory;
             int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
             auto cpu_tab = Container::Vertical({});
             auto cpu_info = vbox
@@ -54,29 +56,17 @@ int main()
                         ,   text(std::format(" {}", cpu.model))
                         }
                     )
-                ,   separator()
-                ,   hbox
-                    ({  text(" Load")
-                    |   dim
-                    |   size(WIDTH, EQUAL, 10)
-                    ,   separator()
-                    ,   text(" ")
-                    ,   gauge(cpu_load->total)
-                    |   color(detail::load_color(cpu_load->total))
-                    |   bgcolor(Color::RGB(24, 26, 38))
-                    |   size(WIDTH, EQUAL, term_width - 18)
-                    |   center
-                    ,   filler()
-                    ,   separator()
-                    ,   text(std::format("{:6.1f}% ", cpu_load->total * 100.0))
-                    |   color(detail::load_color(cpu_load->total))
-                    |   bold
-                    })
                 }
             )
             |   border
             // |   bgcolor(Color::RGB(30, 35, 57))
             ;
+            auto cpu_load_plot = detail::cpu_load_n_memory_plot
+            (   cpu_load ? std::optional<double>(cpu_load->total) : std::nullopt
+            ,   detail::system_memory_load(memory)
+            ,   monitors.cpu_total_history()
+            ,   monitors.memory_history()
+            );
 
             Elements sockets;
             for (const auto& cpu : *cpus)
@@ -91,7 +81,13 @@ int main()
             auto scrollable_grid = grid_content | scroll_view(cpu_scroll);
 
             cpu_tab->Add(Renderer([cpu_info] { return cpu_info; }));
-            cpu_tab->Add(Renderer([scrollable_grid] { return scrollable_grid; }));
+            cpu_tab->Add
+            (   Renderer
+                (   [cpu_load_plot, scrollable_grid]
+                    {   return detail::plot_over(cpu_load_plot, scrollable_grid);
+                    }
+                )
+            );
             return cpu_tab->Render()
             |   flex
             ;
