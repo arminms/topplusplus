@@ -41,6 +41,8 @@ TEST_CASE("Monitor saves per-thread CPU load history")
     else
     {   const auto threads = snapshot.cpu->per_thread.size();
         REQUIRE(monitors.cpu_history().size() == threads);
+        REQUIRE(monitors.cpu_total_history().size() == 1);
+        REQUIRE(monitors.cpu_total_history()[0] == snapshot.cpu->total);
         for (const auto& history : monitors.cpu_history())
             REQUIRE(history.size() == 1);
 
@@ -51,6 +53,8 @@ TEST_CASE("Monitor saves per-thread CPU load history")
             REQUIRE(history.size() == 3);
             REQUIRE(history[2] == monitors().cpu->per_thread[i]);
         }
+        REQUIRE(monitors.cpu_total_history().size() == 3);
+        REQUIRE(monitors.cpu_total_history()[2] == monitors().cpu->total);
     }
 }
 

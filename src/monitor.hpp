@@ -4,6 +4,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <hwinfo/hwinfo.h>
@@ -49,6 +50,11 @@ struct monitor
     {   return cpu_history_;
     }
 
+    // Total CPU load history, oldest sample first.
+    const circular_buffer_64<std::optional<double>>& cpu_total_history() const
+    {   return cpu_total_history_;
+    }
+
     // GPU status history (one buffer per GPU), oldest sample first.
     const std::vector<circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>>>& gpu_history() const
     {   return gpu_history_;
@@ -72,7 +78,12 @@ struct monitor
 
 private:
     void record_history()
-    {   if (last_snapshot_.cpu)
+    {   cpu_total_history_.push
+        (   last_snapshot_.cpu
+            ?   std::optional<double>(last_snapshot_.cpu->total)
+            :   std::nullopt
+        );
+        if (last_snapshot_.cpu)
         {   const auto& loads = last_snapshot_.cpu->per_thread;
             if (cpu_history_.size() < loads.size())
                 cpu_history_.resize(loads.size());
@@ -94,6 +105,7 @@ private:
     std::vector<hwinfo::GpuSampler> gpu_samplers;
     snapshot last_snapshot_;
     std::vector<circular_buffer_64<double>> cpu_history_;
+    circular_buffer_64<std::optional<double>> cpu_total_history_;
     std::vector<circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>>> gpu_history_;
     circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>> memory_history_;
 };
