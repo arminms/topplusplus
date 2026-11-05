@@ -27,7 +27,9 @@ struct monitor
     {   const auto gpus = hwinfo::gpus();
         if (gpus)
             for (const auto& gpu : *gpus)
-                gpu_samplers.emplace_back(gpu);
+            {   gpu_samplers.emplace_back(gpu);
+                gpu_types_.push_back(gpu.type);
+            }
         last_snapshot_ = take_snapshot();
         record_history();
     }
@@ -71,8 +73,24 @@ struct monitor
         ,   .frequencies = hwinfo::cpu_frequencies()
         ,   .memory = hwinfo::memory_usage()
         };
-        for (auto& sampler : gpu_samplers)
-            current.gpus.push_back(sampler.sample());
+        for (std::size_t i = 0; i < gpu_samplers.size(); ++i)
+        {   auto status = gpu_samplers[i].sample();
+            // Non-discrete GPUs use system RAM, so report that instead
+            if (status && gpu_types_[i] != hwinfo::GpuType::discrete)
+            {   if (current.memory
+                    && current.memory->available.value <= current.memory->total.value)
+                {   status->memory_total = current.memory->total;
+                    status->memory_used = hwinfo::Bytes
+                    {   current.memory->total.value - current.memory->available.value
+                    };
+                }
+                else
+                {   status->memory_total.reset();
+                    status->memory_used.reset();
+                }
+            }
+            current.gpus.push_back(std::move(status));
+        }
         return current;
     }
 
@@ -103,6 +121,7 @@ private:
     std::size_t tick_count_;
     std::unique_ptr<hwinfo::CpuSampler> cpu_sampler_;
     std::vector<hwinfo::GpuSampler> gpu_samplers;
+    std::vector<hwinfo::GpuType> gpu_types_;
     snapshot last_snapshot_;
     std::vector<circular_buffer_64<double>> cpu_history_;
     circular_buffer_64<std::optional<double>> cpu_total_history_;
