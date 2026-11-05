@@ -446,6 +446,22 @@ inline ftxui::Element gpu_content
     ?   std::format("{:.1W}", *status->power)
     :   std::string("Unavailable")
     ;
+    const auto sms_cores = std::format
+    (   "{} / {}"
+    ,   gpu.compute_units ? std::to_string(*gpu.compute_units) : "Unavailable"
+    ,   gpu.cores ? std::to_string(*gpu.cores) : "Unavailable"
+    );
+    std::string apis;
+    for (const auto& api : gpu.compute_apis)
+        apis += std::format
+        (   "{}{}{}{}"
+        ,   apis.empty() ? "" : ", "
+        ,   api.name
+        ,   api.version.empty() ? "" : " "
+        ,   api.version
+        );
+    if (apis.empty())
+        apis = "Unavailable";
 
     static const circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> empty_history;
     const auto& history = gpu_position < mon.gpu_history().size()
@@ -530,7 +546,8 @@ inline ftxui::Element gpu_content
             |   hcenter
         ,   separator()
         ,   vbox
-            (   {   hbox
+            (   {   gpu_info_row(" Type", std::string(hwinfo::to_string(gpu.type)))
+                ,   hbox
                     (   hbox
                         (   {   text(" Memory")
                             |   dim
@@ -546,12 +563,14 @@ inline ftxui::Element gpu_content
                             }
                         )
                     )
+                ,   gpu_info_row(" SMs / Cores", sms_cores)
                 ,   gpu_info_row(" PCIe Link", pcie_link)
                 ,   gpu_info_row(" Frequency", frequency)
                 ,   gpu_info_row(" Memory Freq.", memory_frequency)
                 ,   gpu_info_row(" Temperature", temperature)
                 ,   gpu_info_row(" Fan Speed", fan_speed)
                 ,   gpu_info_row(" Power", power)
+                ,   gpu_info_row(" APIs", apis)
                 }
             )
         }
@@ -572,7 +591,7 @@ constexpr int gpu_min_width = 80;
 constexpr int gpu_max_width = 120;
 // The minimum height is the natural height of a box with a plot at the
 // smallest plot size; the plot absorbs any extra height.
-constexpr int gpu_min_height = 29;
+constexpr int gpu_min_height = 32;
 constexpr int gpu_max_height = 40;
 
 // Flows the device boxes into rows: as many per row as fit at the minimum
