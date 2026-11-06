@@ -20,7 +20,7 @@ project(
   top++
   VERSION 0.5.0
   LANGUAGES CXX
-  DESCRIPTION "C++23 system monitor tool"
+  DESCRIPTION "Multiplatform system information and monitoring tool"
   HOMEPAGE_URL "https://github.com/arminms/top++"
 )
 
