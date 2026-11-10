@@ -24,10 +24,14 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Config and Build (Linux)
-        uses: docker://asobhani/ubuntu18-gcc15
-        with:
-          entrypoint: /bin/bash
-          args: -c 'cmake -B build -DCMAKE_BUILD_TYPE=Release -DTOPPP_ENABLE_STATIC=ON && cmake --build build --parallel'
+        run: |
+          docker run --rm --entrypoint /bin/bash \
+          -v "${{ github.workspace }}:/workspace" \
+          asobhani/ubuntu18-gcc15 -c \
+          'cmake -B /workspace/build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DTOPPP_ENABLE_STATIC=ON \
+          && cmake --build /workspace/build --parallel'
         if: matrix.os == 'ubuntu-latest'
 
       - name: Config and Build (Windows)
