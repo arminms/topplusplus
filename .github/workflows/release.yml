@@ -1,0 +1,88 @@
+name: Multi-Platform Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.os }} (${{ matrix.build_type }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: top++-linux-x86_64
+          - os: macos-latest
+            asset_name: top++-macos-universal
+          - os: windows-latest
+            asset_name: top++-windows-x86_64.exe
+        build_type: [Release]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Config and Build (Linux)
+        run: |
+          docker run --rm -v ${{github.workspace}}:/workspace \
+          asobhani/ubuntu18-gcc15 \
+          cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+          -DTOPPP_ENABLE_STATIC=ON \
+          && cmake --build ${{github.workspace}}/build --parallel
+        if: matrix.os == 'ubuntu-latest'
+
+      - name: Config and Build (Windows)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build build --config ${{ matrix.build_type }} --parallel
+        if: matrix.os == 'windows-latest'
+
+      - name: Config and Build (macOS)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          cmake --build build --config ${{ matrix.build_type }} --parallel
+        if: matrix.os == 'macos-latest'
+
+      - name: Stash build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset_name }}
+          path: |
+            build/top++
+            build/${{ matrix.build_type }}/top++.exe
+          if-no-files-found: warn
+
+  publish:
+    name: Aggregate Checksums and Attach Assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          # Create checksums for every artifact collected
+          sha256sum * > checksums.txt
+
+      - name: Attach Assets to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
