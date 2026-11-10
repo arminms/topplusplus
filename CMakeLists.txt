@@ -52,6 +52,9 @@ if(TOPPP_ENABLE_STATIC)
   # MSVC: link the static runtime (/MT) so no Visual C++ redistributable is needed
   if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  elseif(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X version" FORCE)
+    set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Build universal binary" FORCE)
   endif()
 endif()
 
@@ -112,7 +115,19 @@ target_compile_features(top++ INTERFACE cxx_std_23)
 if(TOPPP_ENABLE_STATIC AND NOT MSVC)
   if(WIN32)
     target_link_options(top++ PRIVATE -static)
-  elseif(NOT APPLE)
+  elseif(APPLE)
+    # Automatically ad-hoc sign the resulting binary after building
+    add_custom_command(TARGET top++ POST_BUILD
+      COMMAND codesign --force --sign - $<TARGET_FILE:top++>
+      COMMENT "Applying ad-hoc signature to the executable"
+    )
+    # # Ensure RPATH is properly set for any relative bundling if needed
+    # set_target_properties(top++ PROPERTIES
+    #   MACOSX_RPATH TRUE
+    #   BUILD_WITH_INSTALL_RPATH TRUE
+    #   INSTALL_RPATH "@executable_path/../Frameworks;@executable_path"
+    # )
+  else()
     include(CheckLinkerFlag)
     check_linker_flag(CXX -static-libgcc TOPPP_HAS_STATIC_LIBGCC)
     check_linker_flag(CXX -static-libstdc++ TOPPP_HAS_STATIC_LIBSTDCXX)
@@ -140,5 +155,35 @@ else()
     INSTALL_RPATH_USE_LINK_PATH TRUE
   )
 endif()
-install(TARGETS top++ RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS top++ RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT toppp_runtime)
 # install(FILES LICENSE README.md DESTINATION ${CMAKE_INSTALL_DOCDIR})
+
+## packages contain only the self-contained executable
+#
+if(TOPPP_ENABLE_STATIC AND (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR APPLE OR WIN32))
+  set(CPACK_PACKAGE_VENDOR "Armin Sobhani")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+  set(CPACK_PACKAGE_HOMEPAGE_URL "${PROJECT_HOMEPAGE_URL}")
+  configure_file("${PROJECT_SOURCE_DIR}/LICENSE" "${CMAKE_BINARY_DIR}/LICENSE.txt" COPYONLY)
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_BINARY_DIR}/LICENSE.txt")
+  # Exclude install rules from dependencies, including with CMake < 3.28.
+  set(CPACK_INSTALL_CMAKE_PROJECTS
+      "${CMAKE_BINARY_DIR};${CMAKE_PROJECT_NAME};toppp_runtime;/")
+
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(CPACK_GENERATOR "DEB;RPM")
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_VENDOR}")
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+    set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+    set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
+  elseif(APPLE)
+    set(CPACK_GENERATOR "DragNDrop")
+    set(CPACK_DMG_DISABLE_APPLICATIONS_SYMLINK ON)
+  elseif(WIN32)
+    set(CPACK_GENERATOR "WIX")
+    set(CPACK_WIX_UPGRADE_GUID "2A0FF990-59CA-4BE8-A2C2-F63C639F97BF")
+  endif()
+
+  include(CPack)
+endif()
