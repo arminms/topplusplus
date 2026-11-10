@@ -1,0 +1,16 @@
+<CPackWiXPatch>
+  <CPackWiXFragment Id="#PRODUCT">
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="TopppPathEnv" Guid="6F1B7C52-3D8E-4A47-9B0A-5E2C1D4F8A93">
+        <RegistryValue Root="HKCU" Key="Software\Armin Sobhani\top++"
+                       Name="PathEnv" Type="integer" Value="1" KeyPath="yes" />
+        <Environment Id="TopppPath" Name="PATH" Action="set" Part="last"
+                     System="no" Permanent="no" Value="[INSTALL_ROOT]bin" />
+      </Component>
+    </DirectoryRef>
+    <Feature Id="TopppPathFeature" Title="Add to PATH" Level="1" Absent="disallow"
+             Display="hidden">
+      <ComponentRef Id="TopppPathEnv" />
+    </Feature>
+  </CPackWiXFragment>
+</CPackWiXPatch>
