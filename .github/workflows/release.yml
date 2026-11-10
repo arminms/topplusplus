@@ -59,7 +59,7 @@ jobs:
       - name: Stash build artifact (macOS)
         uses: actions/upload-artifact@v7
         with:
-          path: top++-${{ github.ref_name }}-macos-universal.dmg
+          path: top++-${{ github.ref_name }}-Darwin.dmg
           archive: false
           if-no-files-found: warn
         if: matrix.os == 'macos-latest'
