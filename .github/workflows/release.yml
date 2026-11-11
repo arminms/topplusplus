@@ -17,7 +17,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            asset_name: top++-${{ github.ref_name }}-linux-x86_64.tar.gz
+          - os: macos-latest
+            asset_name: top++-${{ github.ref_name }}-macos-universal.dmg
+          - os: windows-latest
+            asset_name: top++-${{ github.ref_name }}-windows-x86_64.msi
         build_type: [Release]
 
     steps:
@@ -31,7 +37,8 @@ jobs:
           'cmake -B /workspace/build \
           -DCMAKE_BUILD_TYPE=Release \
           -DTOPPP_ENABLE_STATIC=ON \
-          && cmake --build /workspace/build --parallel'
+          && cmake --build /workspace/build --config Release --parallel
+          && cpack --config /workspace/build/CPackConfig.cmake -C Release -G TGZ'
         if: matrix.os == 'ubuntu-latest'
 
       - name: Config and Build (Windows)
@@ -48,29 +55,13 @@ jobs:
           cpack --config build/CPackConfig.cmake -C Release -G DragNDrop
         if: matrix.os == 'macos-latest'
 
-      - name: Stash build artifact (Linux)
+      - name: Stash build artifact
         uses: actions/upload-artifact@v7
         with:
-          name: top++-${{ github.ref_name }}-linux-x86_64
-          path: build/top++
-          if-no-files-found: warn
-        if: matrix.os == 'ubuntu-latest'
-
-      - name: Stash build artifact (macOS)
-        uses: actions/upload-artifact@v7
-        with:
-          path: top++-${{ github.ref_name }}-Darwin.dmg
+          path: ${{ matrix.asset_name }}
           archive: false
           if-no-files-found: warn
-        if: matrix.os == 'macos-latest'
-
-      - name: Stash build artifact (Windows)
-        uses: actions/upload-artifact@v7
-        with:
-          path: top++-${{ github.ref_name }}-win64.msi
-          archive: false
-          if-no-files-found: warn
-        if: matrix.os == 'windows-latest'
+          retention-days: 1
 
   publish:
     name: Aggregate Checksums and Attach Assets
@@ -83,7 +74,15 @@ jobs:
       - name: Download all built artifacts
         uses: actions/download-artifact@v8
         with:
-          path: dist
+          path: artifacts
+          skip-decompress: true
+
+      - name: Flatten assets into dist
+        run: |
+          mkdir -p dist
+          # Move files from each individual artifact directory into dist/
+          find artifacts -mindepth 2 -maxdepth 2 -type f -exec mv -t dist/ {} +
+          rm -rf artifacts
 
       - name: Generate Checksums
         run: |
