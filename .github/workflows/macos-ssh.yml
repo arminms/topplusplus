@@ -24,5 +24,5 @@ jobs:
         uses: owenthereal/action-upterm@111c75f07dee6470e7ff7eb108db0d317ac9a3f8 # v2
         timeout-minutes: 60
         with:
-          limit-access-to-actor: true
+          limit-access-to-actor: false
           wait-timeout-minutes: 10
