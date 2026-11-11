@@ -38,7 +38,7 @@ jobs:
           'cmake -B /workspace/build \
           -DCMAKE_BUILD_TYPE=Release \
           -DTOPPP_ENABLE_STATIC=ON \
-          && cmake --build /workspace/build --config Release --parallel
+          && cmake --build /workspace/build --config Release --parallel \
           && cpack --config /workspace/build/CPackConfig.cmake -C Release -G TGZ'
         if: matrix.os == 'ubuntu-latest'
 
