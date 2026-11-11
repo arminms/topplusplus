@@ -104,6 +104,7 @@ endif()
 add_executable(top++ src/top++.cpp)
 target_link_libraries(top++ PRIVATE ftxui::ftxui lfreist-hwinfo::hwinfo)
 target_compile_features(top++ INTERFACE cxx_std_23)
+set_target_properties(top++ PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 ## link the C++ runtime statically as well
 #
