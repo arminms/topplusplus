@@ -46,14 +46,14 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DTOPPP_ENABLE_STATIC=ON
           cmake --build build --config ${{ matrix.build_type }} --parallel
-          cpack --config build/CPackConfig.cmake -C Release -G WIX
+          cpack --config build/CPackConfig.cmake -C Release -G "WIX;TGZ"
         if: matrix.os == 'windows-latest'
 
       - name: Config and Build (macOS)
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DTOPPP_ENABLE_STATIC=ON
           cmake --build build --config ${{ matrix.build_type }} --parallel
-          cpack --config build/CPackConfig.cmake -C Release -G DragNDrop
+          cpack --config build/CPackConfig.cmake -C Release -G "DragNDrop;TGZ"
         if: matrix.os == 'macos-latest'
 
       - name: Stash build artifact
@@ -89,9 +89,9 @@ jobs:
       - name: Generate Checksums
         run: |
           cd dist
-          find . -type f -not -name "checksums.txt" | sort | xargs sha256sum > checksums.txt
+          sha256sum * > top++-SHA-256.txt
           echo "Generated checksums:"
-          cat checksums.txt
+          cat top++-SHA-256.txt
 
       - name: Attach Assets to Release
         uses: softprops/action-gh-release@v3
