@@ -38,13 +38,14 @@ jobs:
           'cmake -B /workspace/build \
           -DCMAKE_BUILD_TYPE=Release \
           -DTOPPP_ENABLE_STATIC=ON \
+          -DCMAKE_EXE_LINKER_FLAGS_RELEASE="-s" \
           && cmake --build /workspace/build --config Release --parallel \
           && cpack --config /workspace/build/CPackConfig.cmake -C Release -G TGZ'
         if: matrix.os == 'ubuntu-latest'
 
       - name: Config and Build (macOS/Windows)
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DTOPPP_ENABLE_STATIC=ON
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DTOPPP_ENABLE_STATIC=ON -DCMAKE_EXE_LINKER_FLAGS_RELEASE="-s"
           cmake --build build --config ${{ matrix.build_type }} --parallel
           cpack --config build/CPackConfig.cmake -C Release -G TGZ
         if: matrix.os != 'ubuntu-latest'
