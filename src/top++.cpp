@@ -37,7 +37,6 @@ int main()
             const auto& cpu_load = monitors().cpu;
             const auto& memory = monitors().memory;
             int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
-            auto cpu_tab = Container::Vertical({});
             auto cpu_info = vbox
             (   {   hbox
                     (   {   text(" Vendor")
@@ -80,15 +79,11 @@ int main()
 
             auto scrollable_grid = grid_content | scroll_view(cpu_scroll);
 
-            cpu_tab->Add(Renderer([cpu_info] { return cpu_info; }));
-            cpu_tab->Add
-            (   Renderer
-                (   [cpu_load_plot, scrollable_grid]
-                    {   return detail::plot_over(cpu_load_plot, scrollable_grid);
-                    }
-                )
-            );
-            return cpu_tab->Render()
+            return vbox
+            (   {   cpu_info
+                ,   detail::plot_over(cpu_load_plot, scrollable_grid)
+                }
+            )
             |   flex
             ;
         }
@@ -96,8 +91,7 @@ int main()
 
     auto gpu_tab = Renderer
     (   [&screen, &gpus, &monitors, &gpu_scroll]
-        {   auto gpu_list = Container::Vertical({});
-            if (!gpus)
+        {   if (!gpus)
                 return text(std::format("Error: {}", gpus.error())) | flex;
             if (gpus->empty())
                 return text("No GPUs were detected") | flex;
@@ -111,9 +105,7 @@ int main()
             )
             |   size(WIDTH, LESS_THAN, term_width)
             |   color(Color::RGB(126, 133, 163));
-            auto scrollable_content = content | scroll_view(gpu_scroll);
-            gpu_list->Add(Renderer([scrollable_content] { return scrollable_content; }));
-            return gpu_list->Render() | flex;
+            return content | scroll_view(gpu_scroll) | flex;
         }
     );
 
