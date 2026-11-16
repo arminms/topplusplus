@@ -92,6 +92,9 @@ int main()
                         ,   cache_sizes(&hwinfo::Cache::l3)
                         )
                     }
+                ,   {   " Flags"
+                    ,   std::format("{}", cpu.flags.size())
+                    }
                 ,   {   " Base frequency" // bug in hwinfo?
                     ,   frequency_range(&hwinfo::Core::max_frequency)
                     }
