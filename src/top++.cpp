@@ -62,6 +62,9 @@ int main()
                 ,   {   " Model"
                     ,   cpu.model
                     }
+                ,   {   " Sockets"
+                    ,   std::format("{}", cpus->size())
+                    }
                 ,   {   " Cores"
                     ,   std::format("{}", cpu.physical_cores)
                     }
