@@ -179,7 +179,7 @@ ftxui::Element cpu_load_n_memory_plot
         ,   text(" ")
         }
     )
-    |   borderStyled(plot_border_color)
+    |   border
     |   size(HEIGHT, GREATER_THAN, 10)
     |   size(HEIGHT, LESS_THAN, 15)
     |   flex

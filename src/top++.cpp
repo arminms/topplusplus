@@ -56,27 +56,44 @@ int main()
                 return std::format("{:.2GHz}", *value);
             };
             auto cpu_info = detail::new_info_box
-            (   {   {" Vendor", cpu.vendor}
-                ,   {" Model", cpu.model}
-                ,   {   " L1d / L1i"
+            (   {   {   " Vendor"
+                    ,   cpu.vendor
+                    }
+                ,   {   " Model"
+                    ,   cpu.model
+                    }
+                ,   {   " Cores"
+                    ,   std::format("{}", cpu.physical_cores)
+                    }
+                ,   {   " Threads"
+                    ,   std::format("{}", cpu.logical_cores)
+                    }
+                ,   {   " L1d cache"
                     ,   std::format
-                        (   "{} / {}"
+                        (   "{}"
                         ,   cache_sizes(&hwinfo::Cache::l1_data)
+                        )
+                    }
+                ,   {   " L1i cache"
+                    ,   std::format
+                        (   "{}"
                         ,   cache_sizes(&hwinfo::Cache::l1_instruction)
                         )
                     }
-                ,   {   " L2 / L3"
+                ,   {   " L2 cache"
+                    ,   std::format("{}", cache_sizes(&hwinfo::Cache::l2))
+                    }
+                ,   {   " L3 cache"
                     ,   std::format
-                        (   "{} / {}"
-                        ,   cache_sizes(&hwinfo::Cache::l2)
+                        (   "{}"
                         ,   cache_sizes(&hwinfo::Cache::l3)
                         )
                     }
-                ,   {   " Base frequency"
-                    ,   frequency_range(&hwinfo::Core::base_frequency)
-                    }
-                ,   {   " Max frequency"
+                ,   {   " Base frequency" // bug in hwinfo?
                     ,   frequency_range(&hwinfo::Core::max_frequency)
+                    }
+                ,   {   " Max frequency" // bug in hwinfo?
+                    ,   frequency_range(&hwinfo::Core::base_frequency)
                     }
                 }
             )
