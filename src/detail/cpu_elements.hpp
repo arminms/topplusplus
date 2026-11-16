@@ -10,6 +10,8 @@
 #include <format>
 #include <string>
 #include <memory>
+#include <ranges>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -295,4 +297,27 @@ inline ftxui::Element plot_over(ftxui::Element plot, ftxui::Element rest)
     );
 }
 
-}   // namespace detail
+inline std::string join(auto&& range, std::string_view separator = ",")
+{   std::string out;
+    for (const auto& value : range)
+        out += std::format("{}{}", out.empty() ? "" : separator, value);
+    return out;
+}
+
+inline std::string simd_support_string(hwinfo::Cpu const& cpu)
+{   return join(cpu.flags | std::views::filter([](std::string_view flag)
+    {   return
+            flag == "sse"
+        ||  flag == "sse2"
+        ||  flag == "sse3"
+        ||  flag == "ssse3"
+        ||  flag == "sse4.1"
+        ||  flag == "sse4.2"
+        ||  flag == "avx"
+        ||  flag == "avx2"
+        ||  flag == "avx512f"
+        ||  flag == "neon";
+    }));
+}
+
+}  // namespace detail

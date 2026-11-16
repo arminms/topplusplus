@@ -95,6 +95,9 @@ int main()
                 ,   {   " Flags"
                     ,   std::format("{}", cpu.flags.size())
                     }
+                ,   {   " SIMD support"
+                    ,   detail::simd_support_string(cpu)
+                    }
                 ,   {   " Base frequency" // bug in hwinfo?
                     ,   frequency_range(&hwinfo::Core::max_frequency)
                     }
