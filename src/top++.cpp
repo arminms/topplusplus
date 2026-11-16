@@ -55,33 +55,29 @@ int main()
                     return std::string("Unavailable");
                 return std::format("{:.2GHz}", *value);
             };
-            auto cpu_info = vbox
-            (   {   detail::new_info_row(" Vendor", cpu.vendor)
-                ,   detail::new_info_row(" Model", cpu.model)
-                ,   detail::new_info_row
-                    (   " L1d / L1i"
+            auto cpu_info = detail::new_info_box
+            (   {   {" Vendor", cpu.vendor}
+                ,   {" Model", cpu.model}
+                ,   {   " L1d / L1i"
                     ,   std::format
                         (   "{} / {}"
                         ,   cache_sizes(&hwinfo::Cache::l1_data)
                         ,   cache_sizes(&hwinfo::Cache::l1_instruction)
                         )
-                    )
-                ,   detail::new_info_row
-                    (   " L2 / L3"
+                    }
+                ,   {   " L2 / L3"
                     ,   std::format
                         (   "{} / {}"
                         ,   cache_sizes(&hwinfo::Cache::l2)
                         ,   cache_sizes(&hwinfo::Cache::l3)
                         )
-                    )
-                ,   detail::new_info_row
-                    (   " Base frequency"
+                    }
+                ,   {   " Base frequency"
                     ,   frequency_range(&hwinfo::Core::base_frequency)
-                    )
-                ,   detail::new_info_row
-                    (   " Max frequency"
+                    }
+                ,   {   " Max frequency"
                     ,   frequency_range(&hwinfo::Core::max_frequency)
-                    )
+                    }
                 }
             )
             |   border
@@ -106,10 +102,13 @@ int main()
 
             auto scrollable_grid = grid_content | scroll_view(cpu_scroll);
 
-            return vbox
-            (   {   cpu_info
-                ,   detail::plot_over(cpu_load_plot, scrollable_grid)
+            auto cpu_summary = hbox
+            (   {   std::move(cpu_info)
+                ,   std::move(cpu_load_plot)
                 }
+            );
+            return detail::plot_over
+            (   std::move(cpu_summary), std::move(scrollable_grid)
             )
             |   flex
             ;
