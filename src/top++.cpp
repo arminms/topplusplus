@@ -7,6 +7,7 @@
 #include <format>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "monitor.hpp"
 #include "cpu_elements.hpp"
@@ -37,23 +38,62 @@ int main()
             const auto& cpu_load = monitors().cpu;
             const auto& memory = monitors().memory;
             int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
+            const auto cache_sizes = [&cpu](auto cache_field)
+            {   if (cpu.cores.empty())
+                    return std::string("Unavailable");
+                const auto& value = cpu.cores.front().cache.*cache_field;
+                if (!value)
+                    return std::string("Unavailable");
+                return std::format("{:.0KiB}", *value);
+            };
+            const auto frequency_range = [&cpu](auto frequency_field)
+            {   if (cpu.cores.empty())
+                    return std::string("Unavailable");
+                const auto& value = cpu.cores.front().*frequency_field;
+                if (!value)
+                    return std::string("Unavailable");
+                return std::format("{:.2GHz}", *value);
+            };
             auto cpu_info = vbox
             (   {   hbox
                     (   {   text(" Vendor")
                         |   dim
-                        |   size(WIDTH, EQUAL, 10)
+                        |   size(WIDTH, EQUAL, 16)
                         ,   separator()
                         ,   text(std::format(" {}", cpu.vendor))
                         }
                     )
-                ,   separator()
                 ,   hbox
                     (   {   text(" Model")
                         |   dim
-                        |   size(WIDTH, EQUAL, 10)
+                        |   size(WIDTH, EQUAL, 16)
                         ,   separator()
                         ,   text(std::format(" {}", cpu.model))
                         }
+                    )
+                ,   detail::gpu_info_row
+                    (   " L1d / L1i"
+                    ,   std::format
+                        (   "{} / {}"
+                        ,   cache_sizes(&hwinfo::Cache::l1_data)
+                        ,   cache_sizes(&hwinfo::Cache::l1_instruction)
+                        )
+                    )
+                ,   detail::gpu_info_row
+                    (   " L2 / L3"
+                    ,   std::format
+                        (   "{} / {}"
+                        ,   cache_sizes(&hwinfo::Cache::l2)
+                        ,   cache_sizes(&hwinfo::Cache::l3)
+                        )
+                    )
+                ,   detail::gpu_info_row
+                    (   " Base frequency"
+                    ,   frequency_range(&hwinfo::Core::base_frequency)
+                    )
+                ,   detail::gpu_info_row
+                    (   " Max frequency"
+                    ,   frequency_range(&hwinfo::Core::max_frequency)
                     )
                 }
             )
