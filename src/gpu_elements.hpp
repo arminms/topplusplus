@@ -17,6 +17,7 @@
 
 #include "detail/cpu_elements.hpp"
 #include "monitor.hpp"
+#include "utility.hpp"
 
 namespace detail {
 
@@ -391,18 +392,6 @@ inline std::string gpu_memory_string(std::optional<hwinfo::Bytes> memory)
     ;
 }
 
-inline ftxui::Element gpu_info_row(std::string label, std::string value)
-{   using namespace ftxui;
-    return hbox
-    (   {   text(std::move(label))
-        |   dim
-        |   size(WIDTH, EQUAL, 16)
-        ,   separator()
-        ,   text(std::format(" {}", value))
-        }
-    );
-}
-
 inline ftxui::Element gpu_content
 (   decltype(ftxui::App::Fullscreen()) const& screen
 ,   hwinfo::Gpu const& gpu
@@ -546,7 +535,7 @@ inline ftxui::Element gpu_content
             |   hcenter
         ,   separator()
         ,   vbox
-            (   {   gpu_info_row(" Type", std::string(hwinfo::to_string(gpu.type)))
+            (   {   new_info_row(" Type", std::string(hwinfo::to_string(gpu.type)))
                 ,   hbox
                     (   hbox
                         (   {   text(" Memory")
@@ -563,14 +552,14 @@ inline ftxui::Element gpu_content
                             }
                         )
                     )
-                ,   gpu_info_row(" SMs / Cores", sms_cores)
-                ,   gpu_info_row(" PCIe Link", pcie_link)
-                ,   gpu_info_row(" Frequency", frequency)
-                ,   gpu_info_row(" Memory Freq.", memory_frequency)
-                ,   gpu_info_row(" Temperature", temperature)
-                ,   gpu_info_row(" Fan Speed", fan_speed)
-                ,   gpu_info_row(" Power", power)
-                ,   gpu_info_row(" APIs", apis)
+                ,   new_info_row(" SMs / Cores", sms_cores)
+                ,   new_info_row(" PCIe Link", pcie_link)
+                ,   new_info_row(" Frequency", frequency)
+                ,   new_info_row(" Memory Freq.", memory_frequency)
+                ,   new_info_row(" Temperature", temperature)
+                ,   new_info_row(" Fan Speed", fan_speed)
+                ,   new_info_row(" Power", power)
+                ,   new_info_row(" APIs", apis)
                 }
             )
         }

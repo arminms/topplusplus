@@ -13,6 +13,7 @@
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
 #include "scroll_view.hpp"
+#include "utility.hpp"
 
 #include <ftxui/dom/node.hpp>
 
@@ -55,23 +56,9 @@ int main()
                 return std::format("{:.2GHz}", *value);
             };
             auto cpu_info = vbox
-            (   {   hbox
-                    (   {   text(" Vendor")
-                        |   dim
-                        |   size(WIDTH, EQUAL, 16)
-                        ,   separator()
-                        ,   text(std::format(" {}", cpu.vendor))
-                        }
-                    )
-                ,   hbox
-                    (   {   text(" Model")
-                        |   dim
-                        |   size(WIDTH, EQUAL, 16)
-                        ,   separator()
-                        ,   text(std::format(" {}", cpu.model))
-                        }
-                    )
-                ,   detail::gpu_info_row
+            (   {   detail::new_info_row(" Vendor", cpu.vendor)
+                ,   detail::new_info_row(" Model", cpu.model)
+                ,   detail::new_info_row
                     (   " L1d / L1i"
                     ,   std::format
                         (   "{} / {}"
@@ -79,7 +66,7 @@ int main()
                         ,   cache_sizes(&hwinfo::Cache::l1_instruction)
                         )
                     )
-                ,   detail::gpu_info_row
+                ,   detail::new_info_row
                     (   " L2 / L3"
                     ,   std::format
                         (   "{} / {}"
@@ -87,11 +74,11 @@ int main()
                         ,   cache_sizes(&hwinfo::Cache::l3)
                         )
                     )
-                ,   detail::gpu_info_row
+                ,   detail::new_info_row
                     (   " Base frequency"
                     ,   frequency_range(&hwinfo::Core::base_frequency)
                     )
-                ,   detail::gpu_info_row
+                ,   detail::new_info_row
                     (   " Max frequency"
                     ,   frequency_range(&hwinfo::Core::max_frequency)
                     )
