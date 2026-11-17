@@ -7,11 +7,13 @@
 #include <format>
 #include <memory>
 #include <optional>
+#include <vector>
 
 #include "monitor.hpp"
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
 #include "scroll_view.hpp"
+#include "commons.hpp"
 
 #include <ftxui/dom/node.hpp>
 
@@ -37,24 +39,71 @@ int main()
             const auto& cpu_load = monitors().cpu;
             const auto& memory = monitors().memory;
             int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
-            auto cpu_info = vbox
-            (   {   hbox
-                    (   {   text(" Vendor")
-                        |   dim
-                        |   size(WIDTH, EQUAL, 10)
-                        ,   separator()
-                        ,   text(std::format(" {}", cpu.vendor))
-                        }
-                    )
-                ,   separator()
-                ,   hbox
-                    (   {   text(" Model")
-                        |   dim
-                        |   size(WIDTH, EQUAL, 10)
-                        ,   separator()
-                        ,   text(std::format(" {}", cpu.model))
-                        }
-                    )
+            const auto cache_sizes = [&cpu](auto cache_field)
+            {   if (cpu.cores.empty())
+                    return std::string("Unavailable");
+                const auto& value = cpu.cores.front().cache.*cache_field;
+                if (!value)
+                    return std::string("Unavailable");
+                return std::format("{:.0KiB}", *value);
+            };
+            const auto frequency_range = [&cpu](auto frequency_field)
+            {   if (cpu.cores.empty())
+                    return std::string("Unavailable");
+                const auto& value = cpu.cores.front().*frequency_field;
+                if (!value)
+                    return std::string("Unavailable");
+                return std::format("{:.2GHz}", *value);
+            };
+            auto cpu_info = detail::new_info_box
+            (   {   {   " Vendor"
+                    ,   cpu.vendor
+                    }
+                ,   {   " Model"
+                    ,   cpu.model
+                    }
+                ,   {   " Sockets"
+                    ,   std::format("{}", cpus->size())
+                    }
+                ,   {   " Cores"
+                    ,   std::format("{}", cpu.physical_cores)
+                    }
+                ,   {   " Threads"
+                    ,   std::format("{}", cpu.logical_cores)
+                    }
+                ,   {   " L1d cache"
+                    ,   std::format
+                        (   "{}"
+                        ,   cache_sizes(&hwinfo::Cache::l1_data)
+                        )
+                    }
+                ,   {   " L1i cache"
+                    ,   std::format
+                        (   "{}"
+                        ,   cache_sizes(&hwinfo::Cache::l1_instruction)
+                        )
+                    }
+                ,   {   " L2 cache"
+                    ,   std::format("{}", cache_sizes(&hwinfo::Cache::l2))
+                    }
+                ,   {   " L3 cache"
+                    ,   std::format
+                        (   "{}"
+                        ,   cache_sizes(&hwinfo::Cache::l3)
+                        )
+                    }
+                ,   {   " Flags"
+                    ,   std::format("{}", cpu.flags.size())
+                    }
+                ,   {   " SIMD support"
+                    ,   detail::simd_support_string(cpu)
+                    }
+                ,   {   " Base frequency" // bug in hwinfo?
+                    ,   frequency_range(&hwinfo::Core::max_frequency)
+                    }
+                ,   {   " Max frequency" // bug in hwinfo?
+                    ,   frequency_range(&hwinfo::Core::base_frequency)
+                    }
                 }
             )
             |   border
@@ -79,10 +128,13 @@ int main()
 
             auto scrollable_grid = grid_content | scroll_view(cpu_scroll);
 
-            return vbox
-            (   {   cpu_info
-                ,   detail::plot_over(cpu_load_plot, scrollable_grid)
+            auto cpu_summary = hbox
+            (   {   std::move(cpu_info)
+                ,   std::move(cpu_load_plot)
                 }
+            );
+            return detail::plot_over
+            (   std::move(cpu_summary), std::move(scrollable_grid)
             )
             |   flex
             ;

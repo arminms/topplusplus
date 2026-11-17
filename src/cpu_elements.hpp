@@ -14,6 +14,7 @@
 #include <hwinfo/hwinfo.h>
 
 #include "monitor.hpp"
+#include "commons.hpp"
 #include "detail/cpu_elements.hpp"
 
 namespace detail {
@@ -179,7 +180,7 @@ ftxui::Element cpu_load_n_memory_plot
         ,   text(" ")
         }
     )
-    |   borderStyled(plot_border_color)
+    |   border
     |   size(HEIGHT, GREATER_THAN, 10)
     |   size(HEIGHT, LESS_THAN, 15)
     |   flex

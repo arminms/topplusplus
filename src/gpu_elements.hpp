@@ -17,8 +17,18 @@
 
 #include "detail/cpu_elements.hpp"
 #include "monitor.hpp"
+#include "commons.hpp"
 
 namespace detail {
+
+// All constansts for GPU plots
+constexpr int gpu_min_width = 80;
+constexpr int gpu_max_width = 120;
+// The minimum height is the natural height of a box with a plot at the
+// smallest plot size; the plot absorbs any extra height.
+constexpr int gpu_min_height = 32;
+constexpr int gpu_max_height = 40;
+
 
 template <typename Value>
 ftxui::Element gpu_plot
@@ -391,18 +401,6 @@ inline std::string gpu_memory_string(std::optional<hwinfo::Bytes> memory)
     ;
 }
 
-inline ftxui::Element gpu_info_row(std::string label, std::string value)
-{   using namespace ftxui;
-    return hbox
-    (   {   text(std::move(label))
-        |   dim
-        |   size(WIDTH, EQUAL, 16)
-        ,   separator()
-        ,   text(std::format(" {}", value))
-        }
-    );
-}
-
 inline ftxui::Element gpu_content
 (   decltype(ftxui::App::Fullscreen()) const& screen
 ,   hwinfo::Gpu const& gpu
@@ -546,7 +544,7 @@ inline ftxui::Element gpu_content
             |   hcenter
         ,   separator()
         ,   vbox
-            (   {   gpu_info_row(" Type", std::string(hwinfo::to_string(gpu.type)))
+            (   {   new_info_row(" Type", std::string(hwinfo::to_string(gpu.type)))
                 ,   hbox
                     (   hbox
                         (   {   text(" Memory")
@@ -563,14 +561,14 @@ inline ftxui::Element gpu_content
                             }
                         )
                     )
-                ,   gpu_info_row(" SMs / Cores", sms_cores)
-                ,   gpu_info_row(" PCIe Link", pcie_link)
-                ,   gpu_info_row(" Frequency", frequency)
-                ,   gpu_info_row(" Memory Freq.", memory_frequency)
-                ,   gpu_info_row(" Temperature", temperature)
-                ,   gpu_info_row(" Fan Speed", fan_speed)
-                ,   gpu_info_row(" Power", power)
-                ,   gpu_info_row(" APIs", apis)
+                ,   new_info_row(" SMs / Cores", sms_cores)
+                ,   new_info_row(" PCIe Link", pcie_link)
+                ,   new_info_row(" Frequency", frequency)
+                ,   new_info_row(" Memory Freq.", memory_frequency)
+                ,   new_info_row(" Temperature", temperature)
+                ,   new_info_row(" Fan Speed", fan_speed)
+                ,   new_info_row(" Power", power)
+                ,   new_info_row(" APIs", apis)
                 }
             )
         }
@@ -586,13 +584,6 @@ inline ftxui::Element gpu_content
     |   flex
     ;
 }
-
-constexpr int gpu_min_width = 80;
-constexpr int gpu_max_width = 120;
-// The minimum height is the natural height of a box with a plot at the
-// smallest plot size; the plot absorbs any extra height.
-constexpr int gpu_min_height = 32;
-constexpr int gpu_max_height = 40;
 
 // Flows the device boxes into rows: as many per row as fit at the minimum
 // width, each stretched to share the row but never beyond the maximum width,
