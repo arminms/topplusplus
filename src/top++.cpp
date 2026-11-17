@@ -13,7 +13,7 @@
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
 #include "scroll_view.hpp"
-#include "utility.hpp"
+#include "commons.hpp"
 
 #include <ftxui/dom/node.hpp>
 
