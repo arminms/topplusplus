@@ -21,6 +21,15 @@
 
 namespace detail {
 
+// All constansts for GPU plots
+constexpr int gpu_min_width = 80;
+constexpr int gpu_max_width = 120;
+// The minimum height is the natural height of a box with a plot at the
+// smallest plot size; the plot absorbs any extra height.
+constexpr int gpu_min_height = 32;
+constexpr int gpu_max_height = 40;
+
+
 template <typename Value>
 ftxui::Element gpu_plot
 (   std::string title
@@ -575,13 +584,6 @@ inline ftxui::Element gpu_content
     |   flex
     ;
 }
-
-constexpr int gpu_min_width = 80;
-constexpr int gpu_max_width = 120;
-// The minimum height is the natural height of a box with a plot at the
-// smallest plot size; the plot absorbs any extra height.
-constexpr int gpu_min_height = 32;
-constexpr int gpu_max_height = 40;
 
 // Flows the device boxes into rows: as many per row as fit at the minimum
 // width, each stretched to share the row but never beyond the maximum width,

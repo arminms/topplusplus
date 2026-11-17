@@ -14,6 +14,7 @@
 #include <hwinfo/hwinfo.h>
 
 #include "monitor.hpp"
+#include "utility.hpp"
 #include "detail/cpu_elements.hpp"
 
 namespace detail {

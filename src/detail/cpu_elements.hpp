@@ -19,6 +19,12 @@
 
 namespace detail {
 
+// All constansts for CPU plots
+constexpr int cell_width = 35;
+constexpr int graph_cols = 31;
+constexpr int graph_rows = 6;
+constexpr std::size_t window = 60;
+
 inline auto count_cores(hwinfo::Cpu const& cpu, hwinfo::CoreType type)
 {   return std::ranges::count(cpu.cores, type, &hwinfo::Core::type);
 }
@@ -40,51 +46,6 @@ inline std::string core_count_string(hwinfo::Cpu const& cpu)
         )
     ;
 }
-
-inline const auto text_color = ftxui::Color::RGB(197, 207, 245);
-inline const auto graph_color = ftxui::Color::RGB(198, 160, 246);
-inline const auto plot_border_color = ftxui::Color::RGB(126, 133, 163);
-inline const auto plot_background = ftxui::Color::RGB(24, 26, 38);
-
-// Canvas nodes overwrite whole cells, so bgcolor() cannot be used on them;
-// the background has to be set on every cell before anything is drawn.
-inline void paint_background(ftxui::Canvas& c)
-{   for (int y = 0; y < c.height(); y += 4)
-        for (int x = 0; x < c.width(); x += 2)
-            c.Style
-            (   x, y
-            ,   [](ftxui::Cell& cell) { cell.background_color = plot_background; }
-            );
-}
-
-// Continuous shade from green (0) through yellow and orange to red (1)
-inline ftxui::Color load_color(double load)
-{   struct stop { double at; int r, g, b; };
-    static constexpr stop stops[] =
-    {   {0.00,  80, 200,  80}
-    ,   {0.50, 240, 220,  60}
-    ,   {0.75, 245, 150,  50}
-    ,   {1.00, 230,  60,  60}
-    };
-    load = std::clamp(load, 0.0, 1.0);
-    for (std::size_t i = 1; i < std::size(stops); ++i)
-    {   if (load > stops[i].at)
-            continue;
-        const auto& a = stops[i - 1];
-        const auto& b = stops[i];
-        const double t = (load - a.at) / (b.at - a.at);
-        const auto mix = [t](int u, int v)
-        {   return static_cast<std::uint8_t>(std::lround(u + (v - u) * t));
-        };
-        return ftxui::Color::RGB(mix(a.r, b.r), mix(a.g, b.g), mix(a.b, b.b));
-    }
-    return ftxui::Color::RGB(stops[3].r, stops[3].g, stops[3].b);
-}
-
-constexpr int cell_width = 35;
-constexpr int graph_cols = 31;
-constexpr int graph_rows = 6;
-constexpr std::size_t window = 60;
 
 inline ftxui::Elements error_box(hwinfo::error const& message)
 {   using namespace ftxui;
@@ -295,13 +256,6 @@ inline ftxui::Element plot_over(ftxui::Element plot, ftxui::Element rest)
 {   return std::make_shared<plot_over_node>
     (   std::move(plot), std::move(rest), plot_min_height, plot_max_height
     );
-}
-
-inline std::string join(auto&& range, std::string_view separator = ",")
-{   std::string out;
-    for (const auto& value : range)
-        out += std::format("{}{}", out.empty() ? "" : separator, value);
-    return out;
 }
 
 inline std::string simd_support_string(hwinfo::Cpu const& cpu)
