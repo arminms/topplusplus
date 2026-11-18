@@ -43,12 +43,20 @@ jobs:
           restore-keys: |
             vcpkg-${{ matrix.triplet }}-
 
+      # Ninja would otherwise pick up MinGW gcc on Windows runners
+      - name: Set up MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure CMake
         run: >
           cmake --preset vcpkg
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
           -DTOPPP_ENABLE_TESTS=ON
+          ${{ runner.os == 'Windows' && '-DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl' || '' }}
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
