@@ -36,7 +36,7 @@ jobs:
         run: mkdir -p "${{ github.workspace }}/vcpkg-bincache"
 
       - name: Restore vcpkg binary cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ github.workspace }}/vcpkg-bincache
           key: vcpkg-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
