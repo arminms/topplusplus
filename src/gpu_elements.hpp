@@ -111,6 +111,114 @@ ftxui::Element gpu_plot
     ;
 }
 
+// A single load series with its legend inside the canvas, like the legends of
+// gpu_plot_load_n_memory: a marker shaded by the current load, the name and
+// the percentage, in headroom reserved above the plot area.
+template <typename Value>
+ftxui::Element gpu_plot_legend
+(   std::string name
+,   std::optional<double> current_load
+,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
+,   Value value
+)
+{   using namespace ftxui;
+    const std::size_t n = std::min(history.size(), window);
+    auto plot = canvas
+    (   [&history, n, value, current_load, name = std::move(name)](Canvas& c)
+        {   paint_background(c);
+            constexpr int cell_height = 4;
+            constexpr int top = cell_height;
+            // Room for the widest percentage marker ("100") and a gap
+            constexpr int axis_px = 2 * 4;
+            const int width = c.width();
+            const int height = c.height();
+            if (width <= axis_px + 1 || height <= top + 1)
+                return;
+            c.DrawText
+            (   0, 0, "■"
+            ,   current_load ? load_color(*current_load) : Color::Default
+            );
+            c.DrawText(4, 0, name);
+            const int percent_x = 4 + 2 * (string_width(name) + 1);
+            if (current_load)
+                c.DrawText
+                (   percent_x, 0
+                ,   std::format("{:5.1f}%", *current_load * 100.0)
+                ,   load_color(*current_load)
+                );
+            else
+                c.DrawText(percent_x, 0, "unavailable");
+            const auto y = [height](double load)
+            {   return top + static_cast<int>
+                (   std::lround
+                    (   (1.0 - std::clamp(load, 0.0, 1.0)) * (height - 1 - top)
+                    )
+                );
+            };
+            int previous_row = -1;
+            for (const int percent : {100, 50, 0})
+            {   const int row = y(percent / 100.0) / cell_height;
+                if (row == previous_row)
+                    continue;
+                previous_row = row;
+                const auto marker = std::to_string(percent);
+                c.DrawText
+                (   2 * (3 - static_cast<int>(marker.size()))
+                ,   row * cell_height
+                ,   marker
+                ,   Color::White
+                );
+            }
+            if (!n)
+                return;
+            const int plot_width = width - axis_px;
+            const auto x = [width, plot_width, n](std::size_t k)
+            {   return width - 1 - static_cast<int>
+                (   std::lround
+                    (   double(n - 1 - k) * (plot_width - 1) / (window - 1)
+                    )
+                );
+            };
+            const auto fill = [&](int px, double load)
+            {   c.DrawPointLine(px, y(load), px, height - 1, load_color(load));
+            };
+            std::optional<double> previous;
+            int previous_x = 0;
+            for (std::size_t k = 0; k < n; ++k)
+            {   const auto& sample = history[history.size() - n + k];
+                const auto current = sample ? value(*sample) : std::nullopt;
+                const int current_x = x(k);
+                if (current)
+                {   const int span = current_x - previous_x;
+                    if (previous && span)
+                        for (int px = previous_x + 1; px <= current_x; ++px)
+                            fill
+                            (   px
+                            ,   *previous + (*current - *previous)
+                                * (px - previous_x) / span
+                            );
+                    else
+                        fill(current_x, *current);
+                }
+                previous = current;
+                previous_x = current_x;
+            }
+        }
+    )
+    |   size(HEIGHT, GREATER_THAN, 8)
+    |   flex
+    ;
+    return hbox
+    (   {   separator()
+        ,   text(" ")
+        ,   std::move(plot)
+        ,   text(" ")
+        }
+    )
+    |   flex
+    ;
+}
+
 // Wireframe surface in the style of canvas_animated.cpp's "2D gaussian plot".
 // The mesh's x axis is time (newest on the right), its y axis is GPU memory
 // usage in [0, 1] and its height is GPU load in [0, 1]: each time step raises
@@ -460,6 +568,7 @@ inline ftxui::Element gpu_content
         );
     if (apis.empty())
         apis = "Unavailable";
+    apis += ' ';
 
     static const circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> empty_history;
     const auto& history = gpu_position < mon.gpu_history().size()
@@ -515,6 +624,16 @@ inline ftxui::Element gpu_content
     ;
     const auto memory_label = std::format("{} {}", memory_name, memory_percent);
 
+    const auto video_load = [](hwinfo::GpuStatus const& sample)
+    {   return sample.video_utilization;
+    };
+    const auto has_video_load = std::any_of
+    (   history.begin(), history.end()
+    ,   [&](const auto& sample)
+        {   return sample && video_load(*sample).has_value();
+        }
+    );
+
     Elements plots;
     if (has_load && has_memory_load)
         plots.push_back
@@ -543,7 +662,8 @@ inline ftxui::Element gpu_content
             |   bold
             |   hcenter
         ,   separator()
-        ,   vbox
+        ,   hbox
+            (   {   vbox
             (   {   new_info_row(" Type", std::string(hwinfo::to_string(gpu.type)))
                 ,   hbox
                     (   hbox
@@ -570,6 +690,16 @@ inline ftxui::Element gpu_content
                 ,   new_info_row(" Power", power)
                 ,   new_info_row(" APIs", apis)
                 }
+            )
+            ,   has_video_load
+                ?   gpu_plot_legend
+                (   "Video Encode/Decode", status ? status->video_utilization : std::nullopt
+                ,   history, video_load
+                )
+                |   size(WIDTH, GREATER_THAN, 24)
+                |   flex
+                :   emptyElement()
+            }
             )
         }
     );
