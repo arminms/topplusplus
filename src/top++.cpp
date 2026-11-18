@@ -33,113 +33,26 @@ int main()
 
     scroll_state cpu_scroll;
     scroll_state gpu_scroll;
+
+// -----------------------------------------------------------------------------
+// CPU tab
+// -----------------------------------------------------------------------------
+
     auto cpu_tab = Renderer
     (   [&screen, &cpus, &monitors, &cpu_scroll]
-        {   const auto& cpu = cpus->front();
-            const auto& cpu_load = monitors().cpu;
-            const auto& memory = monitors().memory;
-            int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
-            const auto cache_sizes = [&cpu](auto cache_field)
-            {   if (cpu.cores.empty())
-                    return std::string("Unavailable");
-                const auto& value = cpu.cores.front().cache.*cache_field;
-                if (!value)
-                    return std::string("Unavailable");
-                return std::format("{:.0KiB}", *value);
-            };
-            const auto frequency_range = [&cpu](auto frequency_field)
-            {   if (cpu.cores.empty())
-                    return std::string("Unavailable");
-                const auto& value = cpu.cores.front().*frequency_field;
-                if (!value)
-                    return std::string("Unavailable");
-                return std::format("{:.2GHz}", *value);
-            };
-            auto cpu_info = detail::new_info_box
-            (   {   {   " Vendor"
-                    ,   cpu.vendor
-                    }
-                ,   {   " Model"
-                    ,   cpu.model + " "
-                    }
-                ,   {   " Sockets"
-                    ,   std::format("{}", cpus->size())
-                    }
-                ,   {   " Cores"
-                    ,   std::format("{}", cpu.physical_cores)
-                    }
-                ,   {   " Threads"
-                    ,   std::format("{}", cpu.logical_cores)
-                    }
-                ,   {   " L1d cache"
-                    ,   std::format
-                        (   "{}"
-                        ,   cache_sizes(&hwinfo::Cache::l1_data)
-                        )
-                    }
-                ,   {   " L1i cache"
-                    ,   std::format
-                        (   "{}"
-                        ,   cache_sizes(&hwinfo::Cache::l1_instruction)
-                        )
-                    }
-                ,   {   " L2 cache"
-                    ,   std::format("{}", cache_sizes(&hwinfo::Cache::l2))
-                    }
-                ,   {   " L3 cache"
-                    ,   std::format
-                        (   "{}"
-                        ,   cache_sizes(&hwinfo::Cache::l3)
-                        )
-                    }
-                ,   {   " Flags"
-                    ,   std::format("{}", cpu.flags.size())
-                    }
-                ,   {   " SIMD support"
-                    ,   detail::simd_support_string(cpu) + " "
-                    }
-                ,   {   " Base frequency" // bug in hwinfo?
-                    ,   frequency_range(&hwinfo::Core::max_frequency)
-                    }
-                ,   {   " Max frequency" // bug in hwinfo?
-                    ,   frequency_range(&hwinfo::Core::base_frequency)
-                    }
-                }
-            )
-            |   border
-            // |   bgcolor(Color::RGB(30, 35, 57))
-            ;
-            auto cpu_load_plot = detail::cpu_load_n_memory_plot
-            (   cpu_load ? std::optional<double>(cpu_load->total) : std::nullopt
-            ,   memory
-            ,   monitors.cpu_total_history()
-            ,   monitors.memory_history()
+        {   if (!cpus)
+                return text(std::format("Error: {}", cpus.error())) | flex;
+            if (cpus->empty())
+                return text("No CPUs were detected") | flex;
+            return detail::cpu_content
+            (   screen, *cpus, monitors, scroll_view(cpu_scroll)
             );
-
-            Elements sockets;
-            for (const auto& cpu : *cpus)
-                // sockets.append_range(socket_content(screen, cpu, monitors));
-                sockets.append_range(socket_content_filled_plot(screen, cpu, monitors));
-
-            auto grid_content
-            =   vbox(std::move(sockets))
-            |   color(Color::RGB(126, 133, 163))
-            |   size(WIDTH, LESS_THAN, term_width);
-
-            auto scrollable_grid = grid_content | scroll_view(cpu_scroll);
-
-            auto cpu_summary = hbox
-            (   {   std::move(cpu_info)
-                ,   std::move(cpu_load_plot)
-                }
-            );
-            return detail::plot_over
-            (   std::move(cpu_summary), std::move(scrollable_grid)
-            )
-            |   flex
-            ;
         }
     );
+
+// -----------------------------------------------------------------------------
+// GPU tab
+// -----------------------------------------------------------------------------
 
     auto gpu_tab = Renderer
     (   [&screen, &gpus, &monitors, &gpu_scroll]
@@ -162,14 +75,13 @@ int main()
     );
 
 // -----------------------------------------------------------------------------
-// Tabs
+// Main container
 // -----------------------------------------------------------------------------
 
     int tab_index = 0;
     std::vector<std::string> tab_entries =
     {   " CPU "
     ,   " GPU "
-    // ,   " Memory "
     };
     auto option = MenuOption::HorizontalAnimated();
     option.underline.color_inactive = Color::RGB(126, 133, 163);
@@ -295,6 +207,10 @@ int main()
             return true;
         }
     );
+
+// -----------------------------------------------------------------------------
+// Main loop
+// -----------------------------------------------------------------------------
 
     Loop loop(&screen, scrollable);
     auto fps_window_start = std::chrono::steady_clock::now();

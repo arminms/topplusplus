@@ -289,3 +289,113 @@ ftxui::Elements socket_content_filled_plot
         }
     );
 }
+
+namespace detail {
+
+inline ftxui::Element cpu_summary
+(   hwinfo::Cpu const& cpu
+,   std::size_t socket_count
+,   monitor const& mon
+)
+{   using namespace ftxui;
+    const auto cache_sizes = [&cpu](auto cache_field)
+    {   if (cpu.cores.empty())
+            return std::string("Unavailable");
+        const auto& value = cpu.cores.front().cache.*cache_field;
+        if (!value)
+            return std::string("Unavailable");
+        return std::format("{:.0KiB}", *value);
+    };
+    const auto frequency_range = [&cpu](auto frequency_field)
+    {   if (cpu.cores.empty())
+            return std::string("Unavailable");
+        const auto& value = cpu.cores.front().*frequency_field;
+        if (!value)
+            return std::string("Unavailable");
+        return std::format("{:.2GHz}", *value);
+    };
+    auto info = new_info_box
+    (   {   {   " Vendor"
+            ,   cpu.vendor
+            }
+        ,   {   " Model"
+            ,   cpu.model + " "
+            }
+        ,   {   " Sockets"
+            ,   std::format("{}", socket_count)
+            }
+        ,   {   " Cores"
+            ,   std::format("{}", cpu.physical_cores)
+            }
+        ,   {   " Threads"
+            ,   std::format("{}", cpu.logical_cores)
+            }
+        ,   {   " L1d cache"
+            ,   cache_sizes(&hwinfo::Cache::l1_data)
+            }
+        ,   {   " L1i cache"
+            ,   cache_sizes(&hwinfo::Cache::l1_instruction)
+            }
+        ,   {   " L2 cache"
+            ,   cache_sizes(&hwinfo::Cache::l2)
+            }
+        ,   {   " L3 cache"
+            ,   cache_sizes(&hwinfo::Cache::l3)
+            }
+        ,   {   " Flags"
+            ,   std::format("{}", cpu.flags.size())
+            }
+        ,   {   " SIMD support"
+            ,   simd_support_string(cpu) + " "
+            }
+        ,   {   " Base frequency" // bug in hwinfo?
+            ,   frequency_range(&hwinfo::Core::max_frequency)
+            }
+        ,   {   " Max frequency" // bug in hwinfo?
+            ,   frequency_range(&hwinfo::Core::base_frequency)
+            }
+        }
+    )
+    |   border
+    ;
+    const auto& snapshot = mon();
+    return hbox
+    (   {   std::move(info)
+        ,   cpu_load_n_memory_plot
+            (   snapshot.cpu
+                ?   std::optional<double>(snapshot.cpu->total)
+                :   std::nullopt
+            ,   snapshot.memory
+            ,   mon.cpu_total_history()
+            ,   mon.memory_history()
+            )
+        }
+    );
+}
+
+template <typename ScrollDecorator>
+inline ftxui::Element cpu_content
+(   decltype(ftxui::App::Fullscreen()) const& screen
+,   std::vector<hwinfo::Cpu> const& cpus
+,   monitor const& mon
+,   ScrollDecorator scroll
+)
+{   using namespace ftxui;
+    const int term_width = screen.dimx() > 6 ? screen.dimx() - 6 : 40;
+    Elements sockets;
+    for (const auto& cpu : cpus)
+        sockets.append_range(socket_content_filled_plot(screen, cpu, mon));
+
+    auto grid_content = vbox(std::move(sockets))
+    |   color(Color::RGB(126, 133, 163))
+    |   size(WIDTH, LESS_THAN, term_width);
+    auto scrollable_grid = grid_content | scroll;
+    return plot_over
+    (   cpu_summary(cpus.front(), cpus.size(), mon)
+    ,   std::move(scrollable_grid)
+    )
+    |   flex
+    ;
+}
+
+}   // namespace detail
