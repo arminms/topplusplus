@@ -30,87 +30,6 @@ constexpr int gpu_min_height = 32;
 constexpr int gpu_max_height = 40;
 
 
-template <typename Value>
-ftxui::Element gpu_plot
-(   std::string title
-,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
-,   Value value
-)
-{   using namespace ftxui;
-    const std::size_t n = std::min(history.size(), window);
-    auto plot = canvas
-    (   [&history, n, value](Canvas& c)
-        {   paint_background(c);
-            const int width = c.width();
-            const int height = c.height();
-            if (!width || !height || !n)
-                return;
-            const auto x = [width, n](std::size_t k)
-            {   return width - 1 - static_cast<int>
-                (   std::lround
-                    (   double(n - 1 - k) * (width - 1)
-                    /   (window - 1)
-                    )
-                );
-            };
-            const auto y = [height](double load)
-            {   return static_cast<int>
-                (   std::lround
-                    (   (1.0 - std::clamp(load, 0.0, 1.0)) * (height - 1)
-                    )
-                );
-            };
-            const auto fill = [&](int px, double load)
-            {   c.DrawPointLine(px, y(load), px, height - 1, load_color(load));
-            };
-
-            std::optional<double> previous;
-            int previous_x = 0;
-            for (std::size_t k = 0; k < n; ++k)
-            {   const auto& sample = history[history.size() - n + k];
-                const auto current = sample ? value(*sample) : std::nullopt;
-                const int current_x = x(k);
-                if (current)
-                {   if (previous)
-                    {   const int span = current_x - previous_x;
-                        if (!span)
-                            fill(current_x, *current);
-                        else
-                            for (int px = previous_x + 1; px <= current_x; ++px)
-                                fill
-                                (   px
-                                ,   *previous + (*current - *previous)
-                                    * (px - previous_x) / span
-                                );
-                    }
-                    else
-                        fill(current_x, *current);
-                }
-                previous = current;
-                previous_x = current_x;
-            }
-        }
-    )
-    |   size(HEIGHT, GREATER_THAN, 15)
-    |   flex
-    ;
-    return vbox
-    (   {   text(std::move(title)) | bold | hcenter
-        ,   separator()
-        ,   hbox
-            (   {   text(" ")
-                ,   std::move(plot)
-                ,   text(" ")
-                }
-            )
-        |   flex
-        }
-    )
-    |   borderStyled(plot_border_color)
-    |   flex
-    ;
-}
-
 // A single load series with its legend inside the canvas, like the legends of
 // gpu_plot_load_n_memory: a marker shaded by the current load, the name and
 // the percentage, in headroom reserved above the plot area.
@@ -120,6 +39,8 @@ ftxui::Element gpu_plot_legend
 ,   std::optional<double> current_load
 ,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
 ,   Value value
+,   bool left_separator = true
+,   int min_height = 8
 )
 {   using namespace ftxui;
     const std::size_t n = std::min(history.size(), window);
@@ -205,11 +126,11 @@ ftxui::Element gpu_plot_legend
             }
         }
     )
-    |   size(HEIGHT, GREATER_THAN, 8)
+    |   size(HEIGHT, GREATER_THAN, min_height)
     |   flex
     ;
     return hbox
-    (   {   separator()
+    (   {   left_separator ? separator() : emptyElement()
         ,   text(" ")
         ,   std::move(plot)
         ,   text(" ")
@@ -497,7 +418,6 @@ ftxui::Element gpu_plot_load_n_memory
         ,   text(" ")
         }
     )
-    |   borderStyled(plot_border_color)
     |   flex
     ;
 }
@@ -610,10 +530,6 @@ inline ftxui::Element gpu_content
     =   std::format("{:<{}}", base_load_name, name_width);
     const auto memory_name
     =   std::format("{:<{}}", base_memory_name, name_width);
-    const auto load_label = status && status->utilization
-    ?   std::format("{} {:5.1f}%", load_name, *status->utilization * 100.0)
-    :   std::format("{} unavailable", load_name)
-    ;
     const auto memory_percent = used_memory && total_memory && total_memory->value
     ?   std::format
         (   "{:5.1f}%"
@@ -622,7 +538,6 @@ inline ftxui::Element gpu_content
         )
     :   std::string("unavailable")
     ;
-    const auto memory_label = std::format("{} {}", memory_name, memory_percent);
 
     const auto video_load = [](hwinfo::GpuStatus const& sample)
     {   return sample.video_utilization;
@@ -644,9 +559,25 @@ inline ftxui::Element gpu_content
             )
         );
     else if (has_load)
-        plots.push_back(gpu_plot(load_label, history, load));
+        plots.push_back
+        (   gpu_plot_legend
+            (   load_name, status ? status->utilization : std::nullopt
+            ,   history, load, false, 15
+            )
+        );
     else if (has_memory_load)
-        plots.push_back(gpu_plot(memory_label, history, memory_load));
+        plots.push_back
+        (   gpu_plot_legend
+            (   memory_name
+            ,   used_memory && total_memory && total_memory->value
+                ?   std::optional<double>
+                    (   static_cast<double>(used_memory->value)
+                        / static_cast<double>(total_memory->value)
+                    )
+                :   std::nullopt
+            ,   history, memory_load, false, 15
+            )
+        );
     const bool has_plots = !plots.empty();
     Element plot_content = emptyElement();
     if (plots.size() == 2)
