@@ -60,7 +60,7 @@ int main()
                     ,   cpu.vendor
                     }
                 ,   {   " Model"
-                    ,   cpu.model
+                    ,   cpu.model + " "
                     }
                 ,   {   " Sockets"
                     ,   std::format("{}", cpus->size())
@@ -96,7 +96,7 @@ int main()
                     ,   std::format("{}", cpu.flags.size())
                     }
                 ,   {   " SIMD support"
-                    ,   detail::simd_support_string(cpu)
+                    ,   detail::simd_support_string(cpu) + " "
                     }
                 ,   {   " Base frequency" // bug in hwinfo?
                     ,   frequency_range(&hwinfo::Core::max_frequency)
