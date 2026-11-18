@@ -25,6 +25,14 @@ function(add_unit_tests TEST_NAME TEST_SOURCE)
   target_link_libraries(${TEST_TARGET} PRIVATE Catch2::Catch2WithMain lfreist-hwinfo::hwinfo)
   target_include_directories(${TEST_TARGET} PRIVATE ${PROJECT_SOURCE_DIR}/src)
   target_compile_features(${TEST_TARGET} PRIVATE cxx_std_23)
+  if(WIN32)
+    add_custom_command(TARGET ${TEST_TARGET} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:${TEST_TARGET}>
+        $<TARGET_FILE_DIR:${TEST_TARGET}>
+      COMMAND_EXPAND_LISTS
+    )
+  endif()
 endfunction()
 
 ## defining unit tests
