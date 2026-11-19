@@ -12,6 +12,7 @@
 #include "monitor.hpp"
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
+#include "ram_elements.hpp"
 #include "scroll_view.hpp"
 #include "commons.hpp"
 
@@ -33,6 +34,7 @@ int main()
 
     scroll_state cpu_scroll;
     scroll_state gpu_scroll;
+    scroll_state ram_scroll;
 
 // -----------------------------------------------------------------------------
 // CPU tab
@@ -75,13 +77,26 @@ int main()
     );
 
 // -----------------------------------------------------------------------------
+// RAM tab
+// -----------------------------------------------------------------------------
+
+    auto ram_tab = Renderer
+    (   [&monitors, &ram_scroll]
+        {   return detail::ram_content(monitors)
+            |   scroll_view(ram_scroll)
+            |   flex;
+        }
+    );
+
+// -----------------------------------------------------------------------------
 // Main container
 // -----------------------------------------------------------------------------
 
     int tab_index = 0;
     std::vector<std::string> tab_entries =
-    {   " CPU "
-    ,   " GPU "
+    {   "  CPU  "
+    ,   "  GPU  "
+    ,   "  RAM  "
     };
     auto option = MenuOption::HorizontalAnimated();
     option.underline.color_inactive = Color::RGB(126, 133, 163);
@@ -96,7 +111,7 @@ int main()
     auto tab_container = Container::Tab
     (   {   cpu_tab,
             gpu_tab,
-            // memory,
+            ram_tab,
         }
     ,   &tab_index
     );
@@ -176,9 +191,16 @@ int main()
     auto scrollable = CatchEvent
     (   main_renderer
     ,   [&](Event e)
-        {   if (tab_index < 0 || tab_index > 1)
+        {   if (tab_index < 0
+                || tab_index >= static_cast<int>(tab_entries.size()))
                 return false;
-            auto& scroll = tab_index == 0 ? cpu_scroll : gpu_scroll;
+            const bool has_gpu_tab = !(gpus && gpus->empty());
+            auto& scroll = tab_index == 0
+            ?   cpu_scroll
+            :   tab_index == 1 && has_gpu_tab
+                ?   gpu_scroll
+                :   ram_scroll
+            ;
             const int view_h = scroll.view_height;
             if (e.is_mouse())
             {   if (!scroll.view.Contain(e.mouse().x, e.mouse().y))

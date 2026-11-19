@@ -16,19 +16,9 @@
 #include "monitor.hpp"
 #include "commons.hpp"
 #include "detail/cpu_elements.hpp"
+#include "ram_elements.hpp"
 
 namespace detail {
-
-inline std::optional<double> system_memory_load
-(   hwinfo::result<hwinfo::MemoryUsage> const& memory
-)
-{   if (!memory || !memory->total.value
-        || memory->available.value > memory->total.value)
-        return std::nullopt;
-    return static_cast<double>
-    (   memory->total.value - memory->available.value
-    )   / static_cast<double>(memory->total.value);
-}
 
 ftxui::Element cpu_load_n_memory_plot
 (   std::optional<double> current_load

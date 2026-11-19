@@ -89,6 +89,19 @@ TEST_CASE("Monitor captures memory usage")
     }
 }
 
+TEST_CASE("Monitor captures physical memory information")
+{   monitor monitors{2};
+    const auto& memory = monitors.memory_info();
+
+    REQUIRE((memory.has_value() || memory.error().code() != std::error_code{}));
+    if (memory)
+    {   REQUIRE(memory->total.value > 0);
+        for (const auto& module : memory->modules)
+            if (module.size)
+                REQUIRE(module.size->value > 0);
+    }
+}
+
 TEST_CASE("Monitor saves memory usage history")
 {   monitor monitors{2};
     REQUIRE(monitors.memory_history().size() == 1);
