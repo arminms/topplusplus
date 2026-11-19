@@ -80,9 +80,11 @@ int main()
 // RAM tab
 // -----------------------------------------------------------------------------
 
+    auto modules = detail::ram_modules(monitors.memory_info());
     auto ram_tab = Renderer
-    (   [&monitors, &ram_scroll]
-        {   return detail::ram_content(monitors)
+    (   modules
+    ,   [&monitors, &ram_scroll, &modules]
+        {   return detail::ram_content(monitors, modules)
             |   scroll_view(ram_scroll)
             |   flex;
         }
@@ -195,6 +197,10 @@ int main()
                 || tab_index >= static_cast<int>(tab_entries.size()))
                 return false;
             const bool has_gpu_tab = !(gpus && gpus->empty());
+            const int ram_tab_index = has_gpu_tab ? 2 : 1;
+            if (tab_index == ram_tab_index
+                && detail::ram_module_navigation(e, modules, tab_selection))
+                return true;
             auto& scroll = tab_index == 0
             ?   cpu_scroll
             :   tab_index == 1 && has_gpu_tab

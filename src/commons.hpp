@@ -7,6 +7,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <cctype>
 
 #include <ftxui/ftxui.hpp>
 
@@ -63,6 +64,7 @@ inline ftxui::Color load_color(double load)
 
 inline ftxui::Element new_info_row(std::string label, std::string value)
 {   using namespace ftxui;
+    value[0] = std::toupper(value[0]);
     return hbox
     (   {   text(std::move(label))
         |   dim

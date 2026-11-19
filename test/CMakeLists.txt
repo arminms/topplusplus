@@ -43,8 +43,11 @@ add_unit_tests("circular_buffer_64" test_circular_buffer.cpp
 add_unit_tests("monitor" test_monitor.cpp
   TEST_PREFIX "[monitor] "
   )
+add_unit_tests("ram_elements" test_ram_elements.cpp)
+target_link_libraries(test_ram_elements PRIVATE ftxui::ftxui)
 
 ## finally adding unit tests
 #
 catch_discover_tests(test_circular_buffer)
 catch_discover_tests(test_monitor)
+catch_discover_tests(test_ram_elements)

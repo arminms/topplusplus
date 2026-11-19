@@ -128,7 +128,116 @@ inline ftxui::Element ram_usage_plot
     ;
 }
 
-inline ftxui::Element ram_content(monitor const& mon)
+inline ftxui::Component ram_module(hwinfo::MemoryModule module)
+{   using namespace ftxui;
+    auto label = std::format
+    (   "Module {} - {} ", module.index, module.name.value_or("Details")
+    );
+    auto details = Renderer
+    (   [module = std::move(module)]
+        {   std::vector<std::pair<std::string, std::string>> rows
+            {   {"   Vendor", module.vendor.value_or("Unavailable")}
+            ,   {"   Model", module.model.value_or("Unavailable")}
+            ,   {"   Type", module.type.value_or("Unavailable")}
+            ,   {"   Form factor", std::format("{}", module.form_factor)}
+            ,   {   "   Size"
+                ,   module.size
+                    ?   std::format("{:.2GiB}", *module.size)
+                    :   "Unavailable"
+                }
+            ,   {   "   Frequency"
+                ,   module.frequency
+                    ?   std::format("{:.0MHz}", *module.frequency)
+                    :   "Unavailable"
+                }
+            ,   {   "   Max frequency"
+                ,   module.max_frequency
+                    ?   std::format("{:.0MHz}", *module.max_frequency)
+                    :   "Unavailable"
+                }
+            ,   {   "   Rank"
+                ,   module.rank ? std::to_string(*module.rank) : "Unavailable"
+                }
+            ,   {   "   Data width"
+                ,   module.data_width
+                    ?   std::format("{} bits", *module.data_width)
+                    :   "Unavailable"
+                }
+            ,   {   "   Total width"
+                ,   module.total_width
+                    ?   std::format("{} bits", *module.total_width)
+                    :   "Unavailable"
+                }
+            ,   {   "   Voltage"
+                ,   module.voltage_mv
+                    ?   std::format("{} mV", *module.voltage_mv)
+                    :   "Unavailable"
+                }
+            };
+            Elements elements;
+            for (auto& [name, value] : rows)
+                elements.push_back
+                (   hbox
+                    (   {   text(std::move(name)) | dim | size(WIDTH, EQUAL, 16)
+                        ,   text(std::format(" {}", value))
+                        }
+                    )
+                );
+            return vbox(std::move(elements));
+        }
+    );
+    return Collapsible(std::move(label), std::move(details), false);
+}
+
+inline ftxui::Component ram_modules
+(   hwinfo::result<hwinfo::Memory> const& memory_info
+)
+{   using namespace ftxui;
+    Components modules;
+    if (memory_info)
+        for (const auto& module : memory_info->modules)
+            modules.push_back(ram_module(module));
+    return Container::Vertical(std::move(modules));
+}
+
+inline bool ram_module_navigation
+(   ftxui::Event event
+,   ftxui::Component const& modules
+,   ftxui::Component const& tab_selection
+)
+{   using namespace ftxui;
+    if (!modules->ChildCount()
+        || (event != Event::Tab && event != Event::TabReverse))
+        return false;
+    const bool forward = event == Event::Tab;
+    const auto last = modules->ChildCount() - 1;
+    if (tab_selection->Focused())
+    {   modules->ChildAt(forward ? 0 : last)->TakeFocus();
+        return true;
+    }
+    if (modules->Focused()
+        && modules->ChildAt(forward ? last : 0)->Focused())
+    {   tab_selection->TakeFocus();
+        return true;
+    }
+    return false;
+}
+
+inline ftxui::Element ram_information
+(   std::vector<std::pair<std::string, std::string>> rows
+,   ftxui::Component const& modules
+)
+{   using namespace ftxui;
+    Elements information_rows{new_info_box(std::move(rows)), separator()};
+    if (modules->ChildCount())
+        information_rows.push_back(modules->Render());
+    return vbox(std::move(information_rows)) | border;
+}
+
+inline ftxui::Element ram_content
+(   monitor const& mon
+,   ftxui::Component const& modules
+)
 {   using namespace ftxui;
     const auto& memory = mon().memory;
     const auto& memory_info = mon.memory_info();
@@ -180,77 +289,11 @@ inline ftxui::Element ram_content(monitor const& mon)
             rows.emplace_back(" Modules", "Unavailable");
         else
             rows.emplace_back(" Modules", std::to_string(installed.modules.size()));
-        for (const auto& module : installed.modules)
-        {   rows.emplace_back
-            (   std::format(" Module {}", module.index)
-            ,   module.name.value_or("Details")
-            );
-            rows.emplace_back
-            (   "   Vendor"
-            ,   module.vendor.value_or("Unavailable")
-            );
-            rows.emplace_back
-            (   "   Model"
-            ,   module.model.value_or("Unavailable")
-            );
-            rows.emplace_back
-            (   "   Type"
-            ,   module.type.value_or("Unavailable")
-            );
-            rows.emplace_back
-            (   "   Form factor"
-            ,   std::format("{}", module.form_factor)
-            );
-            rows.emplace_back
-            (   "   Size"
-            ,   module.size
-                ?   std::format("{:.2GiB}", *module.size)
-                :   "Unavailable"
-            );
-            rows.emplace_back
-            (   "   Frequency"
-            ,   module.frequency
-                ?   std::format("{:.0MHz}", *module.frequency)
-                :   "Unavailable"
-            );
-            rows.emplace_back
-            (   "   Max frequency"
-            ,   module.max_frequency
-                ?   std::format("{:.0MHz}", *module.max_frequency)
-                :   "Unavailable"
-            );
-            rows.emplace_back
-            (   "   Rank"
-            ,   module.rank
-                ?   std::to_string(*module.rank)
-                :   "Unavailable"
-            );
-            rows.emplace_back
-            (   "   Data width"
-            ,   module.data_width
-                ?   std::format("{} bits", *module.data_width)
-                :   "Unavailable"
-            );
-            rows.emplace_back
-            (   "   Total width"
-            ,   module.total_width
-                ?   std::format("{} bits", *module.total_width)
-                :   "Unavailable"
-            );
-            rows.emplace_back
-            (   "   Voltage"
-            ,   module.voltage_mv
-                ?   std::format("{} mV", *module.voltage_mv)
-                :   "Unavailable"
-            );
-        }
     }
     else
         rows.emplace_back(" Modules", std::format("Error: {}", memory_info.error()));
 
-    auto information = new_info_box(std::move(rows))
-    |   border
-    ;
+    auto information = ram_information(std::move(rows), modules);
     return hbox
     (   {   std::move(information)
         ,   ram_usage_plot(memory, mon.memory_history())
