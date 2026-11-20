@@ -286,7 +286,7 @@ inline ftxui::Element ram_content
             :   "Unavailable"
         );
         if (installed.modules.empty())
-            rows.emplace_back(" Modules", "Unavailable");
+            rows.emplace_back(" Modules", "Unavailable ");
         else
             rows.emplace_back(" Modules", std::to_string(installed.modules.size()));
     }
