@@ -40,42 +40,7 @@ ftxui::Element cpu_load_n_memory_plot
             if (width <= axis_px + 1 || height <= top + 1)
                 return;
 
-            c.DrawText
-            (   0, 0, "■"
-            ,   current_load ? load_color(*current_load) : Color::Default
-            );
-            c.DrawText(4, 0, "CPU");
-            // Right-justified so that the '%' signs line up ("100.0%" is the widest)
-            constexpr int percent_cells = 6;
-            const int load_percent_x = 16;
-            const auto draw_percent = [&](int row, double value, Color shade)
-            {   const auto percent = std::format("{:.1f}%", value * 100.0);
-                c.DrawText
-                (   load_percent_x
-                    + 2 * (percent_cells - static_cast<int>(percent.size()))
-                ,   row, percent, shade
-                );
-            };
-            if (current_load)
-                draw_percent(0, *current_load, load_color(*current_load));
-            else
-                c.DrawText(load_percent_x, 0, "unavailable");
-
-            c.DrawText(0, cell_height, "■", graph_color);
-            c.DrawText(4, cell_height, "RAM");
-            if (const auto memory_load = system_memory_load(memory))
-            {   draw_percent(cell_height, *memory_load, graph_color);
-                const hwinfo::Bytes used
-                {   memory->total.value - memory->available.value
-                };
-                c.DrawText
-                (   load_percent_x + 2 * (percent_cells + 1), cell_height
-                ,   std::format("({:.1GiB}/{:.1GiB})", used, memory->total)
-                ,   Color::White
-                );
-            }
-            else
-                c.DrawText(load_percent_x, cell_height, "unavailable");
+            draw_cpu_memory_legend(c, current_load, memory);
 
             const auto y = [height](double value)
             {   return top + static_cast<int>

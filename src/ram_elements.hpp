@@ -30,102 +30,78 @@ inline std::optional<double> system_memory_load
     )   / static_cast<double>(memory->total.value);
 }
 
-inline ftxui::Element ram_usage_plot
-(   hwinfo::result<hwinfo::MemoryUsage> const& memory
-,   circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>> const& history
+inline void draw_cpu_memory_legend
+(   ftxui::Canvas& c
+,   std::optional<double> current_load
+,   hwinfo::result<hwinfo::MemoryUsage> const& memory
 )
 {   using namespace ftxui;
-    auto plot = canvas
-    (   [&history, memory](Canvas& c)
-        {   paint_background(c);
-            constexpr int legend_rows = 1;
-            constexpr int cell_height = 4;
-            constexpr int top = legend_rows * cell_height;
-            constexpr int axis_px = 2 * 4;
-            constexpr std::size_t window = 60;
-            const int width = c.width();
-            const int height = c.height();
-            if (width <= axis_px + 1 || height <= top + 1)
-                return;
+    constexpr int cell_height = 4;
+    constexpr int percent_cells = 6;
+    constexpr int load_percent_x = 16;
+    const auto draw_percent = [&](int row, double value, Color shade)
+    {   const auto percent = std::format("{:.1f}%", value * 100.0);
+        c.DrawText
+        (   load_percent_x
+            + 2 * (percent_cells - static_cast<int>(percent.size()))
+        ,   row, percent, shade
+        );
+    };
 
-            c.DrawText(0, 0, "■", graph_color);
-            c.DrawText(4, 0, "RAM");
-            if (const auto current_load = system_memory_load(memory))
-            {   const auto used = hwinfo::Bytes
-                {   memory->total.value - memory->available.value
-                };
-                c.DrawText
-                (   12, 0
-                ,   std::format
-                    (   "{:5.1f}% ({:.1GiB}/{:.1GiB})"
-                    ,   100.0 * *current_load, used, memory->total
-                    )
-                ,   graph_color
-                );
-            }
-            else
-                c.DrawText(12, 0, "unavailable");
+    c.DrawText
+    (   0, 0, "■"
+    ,   current_load ? load_color(*current_load) : Color::Default
+    );
+    c.DrawText(4, 0, "CPU");
+    if (current_load)
+        draw_percent(0, *current_load, load_color(*current_load));
+    else
+        c.DrawText(load_percent_x, 0, "unavailable");
 
-            const auto y = [height](double value)
-            {   return top + static_cast<int>
-                (   std::lround
-                    (   (1.0 - std::clamp(value, 0.0, 1.0))
-                    *   (height - 1 - top)
-                    )
-                );
-            };
-            int previous_row = -1;
-            for (const int percent : {100, 75, 50, 25, 0})
-            {   const int row = y(percent / 100.0) / cell_height;
-                if (row == previous_row)
-                    continue;
-                previous_row = row;
-                const auto marker = std::to_string(percent);
-                c.DrawText
-                (   2 * (3 - static_cast<int>(marker.size()))
-                ,   row * cell_height, marker, Color::White
-                );
-            }
+    c.DrawText(0, cell_height, "■", graph_color);
+    c.DrawText(4, cell_height, "RAM");
+    if (const auto memory_load = system_memory_load(memory))
+    {   draw_percent(cell_height, *memory_load, graph_color);
+        const hwinfo::Bytes used
+        {   memory->total.value - memory->available.value
+        };
+        c.DrawText
+        (   load_percent_x + 2 * (percent_cells + 1), cell_height
+        ,   std::format("({:.1GiB}/{:.1GiB})", used, memory->total)
+        ,   Color::White
+        );
+    }
+    else
+        c.DrawText(load_percent_x, cell_height, "unavailable");
+}
 
-            const int plot_width = width - axis_px;
-            std::optional<std::pair<int, int>> previous;
-            for (std::size_t k = 0, n = std::min(history.size(), window); k < n; ++k)
-            {   const auto load = system_memory_load(history[history.size() - n + k]);
-                if (!load)
-                {   previous.reset();
-                    continue;
-                }
-                const int x = width - 1 - static_cast<int>
-                (   std::lround
-                    (   double(n - 1 - k) * (plot_width - 1)
-                    /   (window - 1)
-                    )
-                );
-                const std::pair<int, int> point{x, y(*load)};
-                if (previous)
-                    c.DrawPointLine
-                    (   previous->first, previous->second
-                    ,   point.first, point.second, graph_color
-                    );
-                else
-                    c.DrawPoint(point.first, point.second, true, graph_color);
-                previous = point;
-            }
+inline ftxui::Element ram_surface_plot
+(   std::optional<double> current_load
+,   hwinfo::result<hwinfo::MemoryUsage> const& memory
+,   circular_buffer_64<std::optional<double>> const& cpu_history
+,   circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>> const& memory_history
+)
+{   const auto count = std::min(cpu_history.size(), memory_history.size());
+    return plot_2d_mesh
+    (   "", count
+    ,   [&cpu_history, &memory_history, count](std::size_t index)
+        -> std::optional<std::pair<double, double>>
+        {   const auto& cpu = cpu_history[cpu_history.size() - count + index];
+            const auto memory = system_memory_load
+            (   memory_history[memory_history.size() - count + index]
+            );
+            if (cpu && memory)
+                return std::pair{*cpu, *memory};
+            return std::nullopt;
         }
-    )
-    |   flex
-    ;
-    return hbox
-    (   {   text(" ")
-        ,   std::move(plot)
-        ,   text(" ")
+    ,   ""
+    ,   2
+    ,   [current_load, memory](ftxui::Canvas& c)
+        {   draw_cpu_memory_legend(c, current_load, memory);
         }
-    )
-    |   border
-    |   size(HEIGHT, GREATER_THAN, 10)
-    |   size(HEIGHT, LESS_THAN, 15)
-    |   flex
-    ;
+    ,   "RAM"
+    ,   "60 seconds"
+    );
 }
 
 inline ftxui::Component ram_module(hwinfo::MemoryModule module)
@@ -296,7 +272,10 @@ inline ftxui::Element ram_content
     auto information = ram_information(std::move(rows), modules);
     return hbox
     (   {   std::move(information)
-        ,   ram_usage_plot(memory, mon.memory_history())
+        ,   ram_surface_plot
+            (   mon().cpu ? std::optional<double>(mon().cpu->total) : std::nullopt
+            ,   memory, mon.cpu_total_history(), mon.memory_history()
+            )
         }
     )
     |   flex

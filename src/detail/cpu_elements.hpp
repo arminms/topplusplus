@@ -17,13 +17,14 @@
 
 #include <ftxui/dom/node.hpp>
 
+#include "../commons.hpp"
+
 namespace detail {
 
 // All constansts for CPU plots
 constexpr int cell_width = 35;
 constexpr int graph_cols = 31;
 constexpr int graph_rows = 6;
-constexpr std::size_t window = 60;
 
 inline auto count_cores(hwinfo::Cpu const& cpu, hwinfo::CoreType type)
 {   return std::ranges::count(cpu.cores, type, &hwinfo::Core::type);
