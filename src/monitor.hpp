@@ -24,6 +24,7 @@ struct monitor
     :   tick_max_(tick_max)
     ,   tick_count_(0)
     ,   cpu_sampler_(std::make_unique<hwinfo::CpuSampler>())
+    ,   memory_info_(hwinfo::memory())
     {   const auto gpus = hwinfo::gpus();
         if (gpus)
             for (const auto& gpu : *gpus)
@@ -65,6 +66,10 @@ struct monitor
     // Memory usage history, oldest sample first.
     const circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>>& memory_history() const
     {   return memory_history_;
+    }
+
+    const hwinfo::result<hwinfo::Memory>& memory_info() const
+    {   return memory_info_;
     }
 
     snapshot take_snapshot()
@@ -120,6 +125,7 @@ private:
     std::size_t tick_max_;
     std::size_t tick_count_;
     std::unique_ptr<hwinfo::CpuSampler> cpu_sampler_;
+    hwinfo::result<hwinfo::Memory> memory_info_;
     std::vector<hwinfo::GpuSampler> gpu_samplers_;
     std::vector<hwinfo::GpuType> gpu_types_;
     snapshot last_snapshot_;

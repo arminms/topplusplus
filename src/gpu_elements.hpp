@@ -15,9 +15,9 @@
 #include <ftxui/ftxui.hpp>
 #include <hwinfo/hwinfo.h>
 
-#include "detail/cpu_elements.hpp"
 #include "monitor.hpp"
 #include "commons.hpp"
+#include "detail/cpu_elements.hpp"
 
 namespace detail {
 
@@ -136,135 +136,6 @@ ftxui::Element gpu_plot_legend
         ,   text(" ")
         }
     )
-    |   flex
-    ;
-}
-
-// Wireframe surface in the style of canvas_animated.cpp's "2D gaussian plot".
-// The mesh's x axis is time (newest on the right), its y axis is GPU memory
-// usage in [0, 1] and its height is GPU load in [0, 1]: each time step raises
-// a gaussian ridge cross-section at its memory usage with its load as the
-// height, so the history reads as a moving mountain range.
-template <typename LoadValue, typename MemoryValue>
-ftxui::Element gpu_plot_2d
-(   std::string title
-,   circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>> const& history
-,   LoadValue load_value
-,   MemoryValue memory_value
-)
-{   using namespace ftxui;
-    const std::size_t n = std::min(history.size(), window);
-    auto plot = canvas
-    (   [&history, n, load_value, memory_value](Canvas& c)
-        {   paint_background(c);
-            const int width = c.width();
-            const int height = c.height();
-            if (width < 2 || height < 2 || !n)
-                return;
-
-            constexpr int rows = 15;
-            constexpr double peak_width = 0.2;
-            constexpr int column_px = 3;
-
-            // Oblique projection: x runs right, y runs back (up and sideways)
-            const double peak_px = 0.3 * (height - 1);
-            const double depth_px = (height - 1) - peak_px;
-            const double shear_px = std::min(0.6 * depth_px, 0.4 * (width - 1));
-            const double span_px = (width - 1) - shear_px;
-            const int cols = std::clamp
-            (   static_cast<int>(span_px / column_px), 2, static_cast<int>(window)
-            );
-
-            // One (load, memory) pair per window slot, the newest in the last
-            std::vector<std::optional<std::pair<double, double>>> series(window);
-            for (std::size_t k = 0; k < n; ++k)
-            {   const auto& sample = history[history.size() - n + k];
-                const auto load = sample ? load_value(*sample) : std::nullopt;
-                const auto usage = sample ? memory_value(*sample) : std::nullopt;
-                if (load && usage)
-                    series[window - n + k] = std::pair
-                    {   std::clamp(*load, 0.0, 1.0)
-                    ,   std::clamp(*usage, 0.0, 1.0)
-                    };
-            }
-
-            // Resample the series onto the mesh columns
-            std::vector<double> surface(cols * rows, 0.0);
-            for (int col = 0; col < cols; ++col)
-            {   const double pos = double(col) * (window - 1) / (cols - 1);
-                const auto lo = static_cast<std::size_t>(pos);
-                const auto hi = std::min(lo + 1, window - 1);
-                const double t = pos - lo;
-                const auto& a = series[lo];
-                const auto& b = series[hi];
-                std::optional<std::pair<double, double>> point;
-                if (a && b)
-                    point = std::pair
-                    {   a->first + (b->first - a->first) * t
-                    ,   a->second + (b->second - a->second) * t
-                    };
-                else
-                    point = t < 0.5 ? a : b;
-                if (!point)
-                    continue;
-                const double centre = point->second * (rows - 1);
-                for (int row = 0; row < rows; ++row)
-                {   const double d = row - centre;
-                    surface[row * cols + col]
-                    =   point->first * std::exp(-peak_width * d * d);
-                }
-            }
-
-            const auto project = [=](int col, int row, double z)
-            {   return std::pair
-                {   static_cast<int>
-                    (   std::lround
-                        (   span_px * col / (cols - 1)
-                        +   shear_px * row / (rows - 1)
-                        )
-                    )
-                ,   static_cast<int>
-                    (   std::lround
-                        (   (height - 1)
-                        -   depth_px * row / (rows - 1)
-                        -   peak_px * z
-                        )
-                    )
-                };
-            };
-            const auto edge = [&](int c0, int r0, int c1, int r1)
-            {   const double z0 = surface[r0 * cols + c0];
-                const double z1 = surface[r1 * cols + c1];
-                const auto [ax, ay] = project(c0, r0, z0);
-                const auto [bx, by] = project(c1, r1, z1);
-                c.DrawPointLine(ax, ay, bx, by, load_color((z0 + z1) / 2));
-            };
-            for (int row = 0; row < rows; ++row)
-                for (int col = 0; col < cols; ++col)
-                {   if (col)
-                        edge(col - 1, row, col, row);
-                    if (row)
-                        edge(col, row - 1, col, row);
-                }
-        }
-    )
-    |   size(HEIGHT, GREATER_THAN, 15)
-    |   flex
-    ;
-    return vbox
-    (   {   text(std::move(title)) | bold | hcenter
-        ,   separator()
-        ,   hbox
-            (   {   text(" ")
-                ,   std::move(plot)
-                ,   text(" ")
-                }
-            )
-        |   flex
-        ,   text("x: time  y: memory usage  height: GPU load") | dim | hcenter
-        }
-    )
-    |   borderStyled(plot_border_color)
     |   flex
     ;
 }
