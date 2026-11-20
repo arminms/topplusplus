@@ -170,8 +170,8 @@ inline ftxui::Component ram_modules
 )
 {   using namespace ftxui;
     Components modules;
-    if (memory_info)
-        for (const auto& module : memory_info->modules)
+    if (memory_info && memory_info->modules)
+        for (const auto& module : *memory_info->modules)
             modules.push_back(ram_module(module));
     return Container::Vertical(std::move(modules));
 }
@@ -261,10 +261,10 @@ inline ftxui::Element ram_content
             ?   std::format("{:.2GiB}", *installed.max_capacity)
             :   "Unavailable"
         );
-        if (installed.modules.empty())
+        if (!installed.modules || installed.modules->empty())
             rows.emplace_back(" Modules", "Unavailable ");
         else
-            rows.emplace_back(" Modules", std::to_string(installed.modules.size()));
+            rows.emplace_back(" Modules", std::to_string(installed.modules->size()));
     }
     else
         rows.emplace_back(" Modules", std::format("Error: {}", memory_info.error()));

@@ -96,9 +96,10 @@ TEST_CASE("Monitor captures physical memory information")
     REQUIRE((memory.has_value() || memory.error().code() != std::error_code{}));
     if (memory)
     {   REQUIRE(memory->total.value > 0);
-        for (const auto& module : memory->modules)
-            if (module.size)
-                REQUIRE(module.size->value > 0);
+        if (memory->modules)
+            for (const auto& module : *memory->modules)
+                if (module.size)
+                    REQUIRE(module.size->value > 0);
     }
 }
 

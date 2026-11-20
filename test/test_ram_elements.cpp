@@ -58,7 +58,8 @@ TEST_CASE("RAM information separates the module section")
     REQUIRE(without_modules.find("Unavailable") < without_modules.find("├"));
     REQUIRE(without_modules.find("├") != std::string::npos);
 
-    memory.modules.push_back(hwinfo::MemoryModule{.index = 0, .vendor = "Vendor"});
+    memory.modules.emplace();
+    memory.modules->push_back(hwinfo::MemoryModule{.index = 0, .vendor = "Vendor"});
     auto modules = detail::ram_modules(memory);
     REQUIRE(modules->OnEvent(ftxui::Event::Return));
     auto with_modules = render(detail::ram_information({{" Total", "16 GiB"}}, modules));
