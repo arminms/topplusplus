@@ -27,6 +27,7 @@ int main()
 {   const auto os = hwinfo::os();
     const auto computer = hwinfo::computer();
     const auto virtualization = hwinfo::virtualization();
+    const auto mainboard = hwinfo::mainboard();
     const auto cpus = hwinfo::cpus();
     const auto gpus = hwinfo::gpus();
     const auto disks = hwinfo::disks();
@@ -100,7 +101,7 @@ int main()
 
     detail::sys_state system_state;
     auto system = detail::sys_content
-    (   computer, virtualization, os, disks, networks, system_state
+    (   computer, virtualization, mainboard, os, disks, networks, system_state
     );
     auto sys_tab = Renderer
     (   system
@@ -113,12 +114,17 @@ int main()
 // Main container
 // -----------------------------------------------------------------------------
 
-    int tab_index = 0;
+    constexpr int sys_tab_index = 0;
+    constexpr int cpu_tab_index = 1;
+    constexpr int gpu_tab_index = 2;
+    const bool has_gpu_tab = !(gpus && gpus->empty());
+    const int ram_tab_index = has_gpu_tab ? 3 : 2;
+    int tab_index = cpu_tab_index;
     std::vector<std::string> tab_entries =
-    {   "  CPU  "
+    {   "  SYS  "
+    ,   "  CPU  "
     ,   "  GPU  "
     ,   "  RAM  "
-    ,   "  SYS  "
     };
     auto option = MenuOption::HorizontalAnimated();
     option.underline.color_inactive = Color::RGB(126, 133, 163);
@@ -131,10 +137,10 @@ int main()
     |   color(Color::RGB(197, 207, 245))
     ;
     auto tab_container = Container::Tab
-    (   {   cpu_tab,
+    (   {   sys_tab,
+            cpu_tab,
             gpu_tab,
             ram_tab,
-            sys_tab,
         }
     ,   &tab_index
     );
@@ -156,9 +162,9 @@ int main()
         }
     );
     // remove GPU tab if no GPUs are detected
-    if (gpus && gpus->empty())
-    {   tab_entries.erase(tab_entries.begin() + 1);
-        tab_container->ChildAt(1)->Detach();
+    if (!has_gpu_tab)
+    {   tab_entries.erase(tab_entries.begin() + gpu_tab_index);
+        tab_container->ChildAt(gpu_tab_index)->Detach();
     }
     auto main_renderer = Renderer
     (   main_container
@@ -217,9 +223,6 @@ int main()
         {   if (tab_index < 0
                 || tab_index >= static_cast<int>(tab_entries.size()))
                 return false;
-            const bool has_gpu_tab = !(gpus && gpus->empty());
-            const int ram_tab_index = has_gpu_tab ? 2 : 1;
-            const int sys_tab_index = ram_tab_index + 1;
             if (tab_index == ram_tab_index
                 && detail::ram_module_navigation(e, modules, tab_selection))
                 return true;
@@ -228,11 +231,13 @@ int main()
                    (   e, system, tab_selection, system_state, sys_scroll
                    ))
                 return true;
-            auto& scroll = tab_index == 0
-            ?   cpu_scroll
-            :   tab_index == 1 && has_gpu_tab
+            auto& scroll = tab_index == sys_tab_index
+            ?   sys_scroll
+            :   tab_index == cpu_tab_index
+                ?   cpu_scroll
+                :   tab_index == gpu_tab_index && has_gpu_tab
                 ?   gpu_scroll
-                :   tab_index == ram_tab_index ? ram_scroll : sys_scroll
+                :   ram_scroll
             ;
             const int view_h = scroll.view_height;
             if (e.is_mouse())
