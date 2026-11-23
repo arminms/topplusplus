@@ -13,6 +13,7 @@
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
 #include "ram_elements.hpp"
+#include "sys_elements.hpp"
 #include "scroll_view.hpp"
 #include "commons.hpp"
 
@@ -28,6 +29,8 @@ int main()
     const auto virtualization = hwinfo::virtualization();
     const auto cpus = hwinfo::cpus();
     const auto gpus = hwinfo::gpus();
+    const auto disks = hwinfo::disks();
+    const auto networks = hwinfo::network_interfaces();
     double fps = 0.0, target_fps = 60.0;
     monitor monitors(static_cast<std::size_t>(target_fps));
     auto screen = App::Fullscreen();
@@ -35,6 +38,7 @@ int main()
     scroll_state cpu_scroll;
     scroll_state gpu_scroll;
     scroll_state ram_scroll;
+    scroll_state sys_scroll;
 
 // -----------------------------------------------------------------------------
 // CPU tab
@@ -91,6 +95,21 @@ int main()
     );
 
 // -----------------------------------------------------------------------------
+// SYS tab
+// -----------------------------------------------------------------------------
+
+    detail::sys_state system_state;
+    auto system = detail::sys_content
+    (   computer, virtualization, os, disks, networks, system_state
+    );
+    auto sys_tab = Renderer
+    (   system
+    ,   [&system, &sys_scroll]
+        {   return system->Render() | scroll_view(sys_scroll) | flex;
+        }
+    );
+
+// -----------------------------------------------------------------------------
 // Main container
 // -----------------------------------------------------------------------------
 
@@ -99,6 +118,7 @@ int main()
     {   "  CPU  "
     ,   "  GPU  "
     ,   "  RAM  "
+    ,   "  SYS  "
     };
     auto option = MenuOption::HorizontalAnimated();
     option.underline.color_inactive = Color::RGB(126, 133, 163);
@@ -114,6 +134,7 @@ int main()
     (   {   cpu_tab,
             gpu_tab,
             ram_tab,
+            sys_tab,
         }
     ,   &tab_index
     );
@@ -144,7 +165,7 @@ int main()
     ,   [&]
         {   const auto uptime = hwinfo::uptime();
             const auto host_info
-            =   virtualization->vm.has_value()
+            =   virtualization && virtualization->vm
                 ?   text(hwinfo::to_string(*virtualization))
                 :   computer.has_value()
                     ?   text(hwinfo::to_string(*computer))
@@ -198,14 +219,20 @@ int main()
                 return false;
             const bool has_gpu_tab = !(gpus && gpus->empty());
             const int ram_tab_index = has_gpu_tab ? 2 : 1;
+            const int sys_tab_index = ram_tab_index + 1;
             if (tab_index == ram_tab_index
                 && detail::ram_module_navigation(e, modules, tab_selection))
+                return true;
+            if (tab_index == sys_tab_index
+                && detail::sys_navigation
+                   (   e, system, tab_selection, system_state, sys_scroll
+                   ))
                 return true;
             auto& scroll = tab_index == 0
             ?   cpu_scroll
             :   tab_index == 1 && has_gpu_tab
                 ?   gpu_scroll
-                :   ram_scroll
+                :   tab_index == ram_tab_index ? ram_scroll : sys_scroll
             ;
             const int view_h = scroll.view_height;
             if (e.is_mouse())
