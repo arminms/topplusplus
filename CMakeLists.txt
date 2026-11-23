@@ -18,7 +18,7 @@ endif()
 #
 project(
   top++
-  VERSION 0.7.0
+  VERSION 0.8.0
   LANGUAGES CXX
   DESCRIPTION "Multiplatform system information and monitoring tool"
   HOMEPAGE_URL "https://github.com/arminms/top++"
