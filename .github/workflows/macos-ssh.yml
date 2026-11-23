@@ -14,11 +14,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # - name: Configure
-      #   run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTOPPP_ENABLE_STATIC=ON -DCMAKE_EXE_LINKER_FLAGS_RELEASE="-s"
+      - name: Configure
+        run: cmake -S . -B build
 
-      # - name: Build
-      #   run: cmake --build build --config Release
+      - name: Build
+        run: cmake --build build
 
       - name: Open SSH session
         uses: owenthereal/action-upterm@111c75f07dee6470e7ff7eb108db0d317ac9a3f8 # v2
