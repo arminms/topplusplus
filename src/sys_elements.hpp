@@ -54,7 +54,8 @@ inline std::vector<sys_node> sys_computer_nodes
 ,   hwinfo::result<hwinfo::Virtualization> const& virtualization
 )
 {   std::vector<sys_node> nodes;
-    if (computer)
+    if (computer && virtualization
+        && !virtualization->vm && !virtualization->container)
     {   nodes =
         {   {"Vendor: " + sys_value(computer->vendor)}
         ,   {"Model: " + sys_value(computer->model)}
@@ -67,11 +68,12 @@ inline std::vector<sys_node> sys_computer_nodes
         };
         if (computer->chassis_code)
             nodes.push_back({"Chassis code: " + std::to_string(*computer->chassis_code)});
-        if (computer->boot_time)
-            nodes.push_back({std::format("Boot time (UTC): {:%F %T}", *computer->boot_time)});
     }
-    else
+    else if (!computer)
         nodes.push_back({std::format("Computer error: {}", computer.error())});
+    if (computer && virtualization && (virtualization->vm || virtualization->container)
+        && computer->boot_time)
+        nodes.push_back({std::format("Boot time (UTC): {:%F %T}", *computer->boot_time)});
     if (!virtualization)
         nodes.push_back({std::format("Virtualization error: {}", virtualization.error())});
     else

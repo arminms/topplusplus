@@ -116,6 +116,61 @@ TEST_CASE("SYS displays VM and container information together")
     REQUIRE(text.find("Kubernetes: Yes") != std::string::npos);
 }
 
+TEST_CASE("SYS shows computer details only on non-virtualized systems")
+{   hwinfo::Computer computer;
+    computer.vendor = "Hardware vendor";
+    computer.model = "Hardware model";
+    computer.family = "Hardware family";
+    computer.version = "Hardware version";
+    computer.sku = "Hardware SKU";
+    computer.serial_number = "Hardware serial";
+    computer.chassis = hwinfo::ChassisType::desktop;
+    computer.chassis_code = 3;
+    computer.boot_time = std::chrono::sys_seconds{std::chrono::seconds{0}};
+    detail::sys_state state;
+    auto draw = [&](hwinfo::result<hwinfo::Virtualization> const& virtualization)
+    {   return render(detail::sys_content
+        (   computer, virtualization, hwinfo::Os{}
+        ,   std::vector<hwinfo::Disk>{}, std::vector<hwinfo::NetworkInterface>{}, state
+        ));
+    };
+
+    const auto bare = draw(hwinfo::Virtualization{});
+    REQUIRE(bare.find("Hardware vendor") != std::string::npos);
+    REQUIRE(bare.find("Hardware model") != std::string::npos);
+    REQUIRE(bare.find("Hardware family") != std::string::npos);
+    REQUIRE(bare.find("Hardware version") != std::string::npos);
+    REQUIRE(bare.find("Hardware SKU") != std::string::npos);
+    REQUIRE(bare.find("Hardware serial") != std::string::npos);
+    REQUIRE(bare.find("Chassis: desktop") != std::string::npos);
+    REQUIRE(bare.find("Chassis code: 3") != std::string::npos);
+    REQUIRE(bare.find("Boot time") == std::string::npos);
+
+    for (const auto& virtualization :
+        {   hwinfo::Virtualization{.vm = hwinfo::VirtualMachine{}}
+        ,   hwinfo::Virtualization{.container = hwinfo::Container{}}
+        })
+    {   const auto text = draw(virtualization);
+        REQUIRE(text.find("Hardware vendor") == std::string::npos);
+        REQUIRE(text.find("Hardware model") == std::string::npos);
+        REQUIRE(text.find("Hardware family") == std::string::npos);
+        REQUIRE(text.find("Hardware version") == std::string::npos);
+        REQUIRE(text.find("Hardware SKU") == std::string::npos);
+        REQUIRE(text.find("Hardware serial") == std::string::npos);
+        REQUIRE(text.find("UUID:") == std::string::npos);
+        REQUIRE(text.find("Chassis:") == std::string::npos);
+        REQUIRE(text.find("Chassis code:") == std::string::npos);
+        REQUIRE(text.find("Boot time (UTC): 1970-01-01 00:00:00") != std::string::npos);
+    }
+
+    const auto unknown = draw
+    (   std::unexpected(hwinfo::error(hwinfo::errc::io_error, "virtualization"))
+    );
+    REQUIRE(unknown.find("Virtualization error: virtualization: I/O error") != std::string::npos);
+    REQUIRE(unknown.find("Hardware vendor") == std::string::npos);
+    REQUIRE(unknown.find("Boot time") == std::string::npos);
+}
+
 TEST_CASE("SYS navigation scrolls focused sections into view")
 {   using namespace ftxui;
     detail::sys_state state;
@@ -135,7 +190,7 @@ TEST_CASE("SYS navigation scrolls focused sections into view")
     auto tabs = Container::Tab({sys_tab}, &selected);
     auto root = Container::Vertical({menu, tabs});
     auto draw = [&]
-    {   auto screen = Screen::Create(Dimension::Fixed(50), Dimension::Fixed(8));
+    {   auto screen = Screen::Create(Dimension::Fixed(50), Dimension::Fixed(6));
         Render(screen, sys_tab->Render());
         return screen.ToString();
     };
