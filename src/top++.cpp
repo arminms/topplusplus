@@ -13,6 +13,7 @@
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
 #include "ram_elements.hpp"
+#include "sys_elements.hpp"
 #include "scroll_view.hpp"
 #include "commons.hpp"
 
@@ -26,8 +27,11 @@ int main()
 {   const auto os = hwinfo::os();
     const auto computer = hwinfo::computer();
     const auto virtualization = hwinfo::virtualization();
+    const auto mainboard = hwinfo::mainboard();
     const auto cpus = hwinfo::cpus();
     const auto gpus = hwinfo::gpus();
+    const auto disks = hwinfo::disks();
+    const auto networks = hwinfo::network_interfaces();
     double fps = 0.0, target_fps = 60.0;
     monitor monitors(static_cast<std::size_t>(target_fps));
     auto screen = App::Fullscreen();
@@ -35,6 +39,7 @@ int main()
     scroll_state cpu_scroll;
     scroll_state gpu_scroll;
     scroll_state ram_scroll;
+    scroll_state sys_scroll;
 
 // -----------------------------------------------------------------------------
 // CPU tab
@@ -91,12 +96,33 @@ int main()
     );
 
 // -----------------------------------------------------------------------------
+// SYS tab
+// -----------------------------------------------------------------------------
+
+    detail::sys_state system_state;
+    auto system = detail::sys_content
+    (   computer, virtualization, mainboard, os, disks, networks, system_state
+    );
+    auto sys_tab = Renderer
+    (   system
+    ,   [&system, &sys_scroll]
+        {   return system->Render() | scroll_view(sys_scroll) | flex;
+        }
+    );
+
+// -----------------------------------------------------------------------------
 // Main container
 // -----------------------------------------------------------------------------
 
-    int tab_index = 0;
+    constexpr int sys_tab_index = 0;
+    constexpr int cpu_tab_index = 1;
+    constexpr int gpu_tab_index = 2;
+    const bool has_gpu_tab = !(gpus && gpus->empty());
+    const int ram_tab_index = has_gpu_tab ? 3 : 2;
+    int tab_index = cpu_tab_index;
     std::vector<std::string> tab_entries =
-    {   "  CPU  "
+    {   "  SYS  "
+    ,   "  CPU  "
     ,   "  GPU  "
     ,   "  RAM  "
     };
@@ -111,7 +137,8 @@ int main()
     |   color(Color::RGB(197, 207, 245))
     ;
     auto tab_container = Container::Tab
-    (   {   cpu_tab,
+    (   {   sys_tab,
+            cpu_tab,
             gpu_tab,
             ram_tab,
         }
@@ -135,16 +162,16 @@ int main()
         }
     );
     // remove GPU tab if no GPUs are detected
-    if (gpus && gpus->empty())
-    {   tab_entries.erase(tab_entries.begin() + 1);
-        tab_container->ChildAt(1)->Detach();
+    if (!has_gpu_tab)
+    {   tab_entries.erase(tab_entries.begin() + gpu_tab_index);
+        tab_container->ChildAt(gpu_tab_index)->Detach();
     }
     auto main_renderer = Renderer
     (   main_container
     ,   [&]
         {   const auto uptime = hwinfo::uptime();
             const auto host_info
-            =   virtualization->vm.has_value()
+            =   virtualization && virtualization->vm
                 ?   text(hwinfo::to_string(*virtualization))
                 :   computer.has_value()
                     ?   text(hwinfo::to_string(*computer))
@@ -196,14 +223,19 @@ int main()
         {   if (tab_index < 0
                 || tab_index >= static_cast<int>(tab_entries.size()))
                 return false;
-            const bool has_gpu_tab = !(gpus && gpus->empty());
-            const int ram_tab_index = has_gpu_tab ? 2 : 1;
             if (tab_index == ram_tab_index
                 && detail::ram_module_navigation(e, modules, tab_selection))
                 return true;
-            auto& scroll = tab_index == 0
-            ?   cpu_scroll
-            :   tab_index == 1 && has_gpu_tab
+            if (tab_index == sys_tab_index
+                && detail::sys_navigation
+                   (   e, system, tab_selection, system_state, sys_scroll
+                   ))
+                return true;
+            auto& scroll = tab_index == sys_tab_index
+            ?   sys_scroll
+            :   tab_index == cpu_tab_index
+                ?   cpu_scroll
+                :   tab_index == gpu_tab_index && has_gpu_tab
                 ?   gpu_scroll
                 :   ram_scroll
             ;
