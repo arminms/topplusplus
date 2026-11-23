@@ -17,6 +17,26 @@ std::string render(ftxui::Component const& component)
 
 }
 
+TEST_CASE("SYS tree has one column of padding inside its border")
+{   using namespace ftxui;
+    detail::sys_state state;
+    auto system = detail::sys_content
+    (   hwinfo::Computer{}, hwinfo::Virtualization{}, hwinfo::Os{}
+    ,   std::vector<hwinfo::Disk>{}, std::vector<hwinfo::NetworkInterface>{}, state
+    );
+    auto screen = Screen::Create(Dimension::Fixed(50), Dimension::Fixed(20));
+    Render(screen, system->Render());
+    REQUIRE(screen.PixelAt(1, 1).character == " ");
+    REQUIRE(screen.PixelAt(2, 1).character == "▼");
+    REQUIRE(screen.PixelAt(2, 2).character == "├");
+    REQUIRE(screen.PixelAt(2, state.headers[1].y_min).character == "├");
+    REQUIRE(screen.PixelAt(6, state.headers[1].y_min).character == "▶");
+
+    state.expanded[0] = false;
+    Render(screen, system->Render());
+    REQUIRE(screen.PixelAt(2, 1).character == "▶");
+}
+
 TEST_CASE("SYS tree expands sections and retains their state")
 {   using namespace ftxui;
     hwinfo::Computer computer;

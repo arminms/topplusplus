@@ -235,7 +235,7 @@ inline ftxui::Component sys_content
                     }
                 }
             }
-            return vbox(std::move(rows)) | border;
+            return hbox({text(" "), vbox(std::move(rows))}) | border;
         }
     );
 }
