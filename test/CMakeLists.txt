@@ -47,6 +47,10 @@ add_unit_tests("ram_elements" test_ram_elements.cpp)
 target_link_libraries(test_ram_elements PRIVATE ftxui::ftxui)
 add_unit_tests("sys_elements" test_sys_elements.cpp)
 target_link_libraries(test_sys_elements PRIVATE ftxui::ftxui)
+add_unit_tests("sysproc" test_sysproc.cpp)
+if(WIN32)
+  target_link_libraries(test_sysproc PRIVATE shell32 psapi advapi32)
+endif()
 
 ## finally adding unit tests
 #
@@ -54,3 +58,4 @@ catch_discover_tests(test_circular_buffer)
 catch_discover_tests(test_monitor)
 catch_discover_tests(test_ram_elements)
 catch_discover_tests(test_sys_elements)
+catch_discover_tests(test_sysproc)
