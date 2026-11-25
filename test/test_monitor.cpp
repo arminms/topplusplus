@@ -4,8 +4,40 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <system_error>
+#include <algorithm>
 
 #include "monitor.hpp"
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
+TEST_CASE("Monitor samples processes on its refresh cycle")
+{   monitor monitors{1};
+#ifdef _WIN32
+    const auto pid = static_cast<uint32_t>(GetCurrentProcessId());
+#else
+    const auto pid = static_cast<uint32_t>(getpid());
+#endif
+    const auto find_self = [pid](const auto& processes)
+    {   return std::find_if(processes.begin(), processes.end(),
+            [pid](const auto& process) { return process.pid == pid; });
+    };
+    const auto& initial = monitors().processes;
+    REQUIRE(find_self(initial) != initial.end());
+    const auto generation = monitors.snapshot_generation();
+    monitors.tick();
+    REQUIRE(monitors.snapshot_generation() == generation);
+    monitors.tick();
+    REQUIRE(monitors.snapshot_generation() == generation + 1);
+    const auto& refreshed = monitors().processes;
+    REQUIRE(find_self(refreshed) != refreshed.end());
+    REQUIRE(std::is_sorted(refreshed.begin(), refreshed.end(), [](const auto& a, const auto& b)
+    {   return a.cpu_percent > b.cpu_percent;
+    }));
+}
 
 TEST_CASE("Monitor captures CPU load and frequencies")
 {   monitor monitors{2};

@@ -13,6 +13,7 @@
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
 #include "ram_elements.hpp"
+#include "prc_elements.hpp"
 #include "sys_elements.hpp"
 #include "scroll_view.hpp"
 #include "commons.hpp"
@@ -40,6 +41,7 @@ int main()
     scroll_state gpu_scroll;
     scroll_state ram_scroll;
     scroll_state sys_scroll;
+    scroll_state prc_scroll;
 
 // -----------------------------------------------------------------------------
 // CPU tab
@@ -111,6 +113,25 @@ int main()
     );
 
 // -----------------------------------------------------------------------------
+// PRC tab
+// -----------------------------------------------------------------------------
+
+    Element prc_table;
+    std::size_t prc_generation = 0;
+    int prc_width = -1;
+    auto prc_tab = Renderer
+    (   [&]
+        {   if (!prc_table || prc_generation != monitors.snapshot_generation()
+                || prc_width != screen.dimx())
+            {   prc_table = detail::prc_content(monitors().processes, screen.dimx());
+                prc_generation = monitors.snapshot_generation();
+                prc_width = screen.dimx();
+            }
+            return prc_table | scroll_view(prc_scroll, true) | flex;
+        }
+    );
+
+// -----------------------------------------------------------------------------
 // Main container
 // -----------------------------------------------------------------------------
 
@@ -119,12 +140,14 @@ int main()
     constexpr int gpu_tab_index = 2;
     const bool has_gpu_tab = !(gpus && gpus->empty());
     const int ram_tab_index = has_gpu_tab ? 3 : 2;
+    const int prc_tab_index = has_gpu_tab ? 4 : 3;
     int tab_index = cpu_tab_index;
     std::vector<std::string> tab_entries =
     {   "  SYS  "
     ,   "  CPU  "
     ,   "  GPU  "
     ,   "  RAM  "
+    ,   "  PRC  "
     };
     auto option = MenuOption::HorizontalAnimated();
     option.underline.color_inactive = Color::RGB(126, 133, 163);
@@ -141,6 +164,7 @@ int main()
             cpu_tab,
             gpu_tab,
             ram_tab,
+            prc_tab,
         }
     ,   &tab_index
     );
@@ -237,6 +261,8 @@ int main()
                 ?   cpu_scroll
                 :   tab_index == gpu_tab_index && has_gpu_tab
                 ?   gpu_scroll
+                :   tab_index == prc_tab_index
+                ?   prc_scroll
                 :   ram_scroll
             ;
             const int view_h = scroll.view_height;

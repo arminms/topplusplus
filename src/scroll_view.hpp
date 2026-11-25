@@ -17,11 +17,14 @@ namespace
     };
 
     // Vertical viewport whose offset is controlled by the application.
-    ftxui::Decorator scroll_view(scroll_state& st)
+    ftxui::Decorator scroll_view(scroll_state& st, bool reserve_scrollbar = false)
     {   class Impl : public ftxui::Node
         {   public:
-                Impl(ftxui::Element child, scroll_state& st)
-                :   Node(ftxui::Elements{std::move(child)}), st_(st) {}
+                Impl(ftxui::Element child, scroll_state& st, bool reserve_scrollbar)
+                :   Node(ftxui::Elements{std::move(child)})
+                ,   st_(st)
+                ,   reserve_scrollbar_(reserve_scrollbar)
+                {}
                 void ComputeRequirement() override
                 {   Node::ComputeRequirement();
                     requirement_ = children_[0]->requirement();
@@ -41,6 +44,8 @@ namespace
                     ftxui::Box cb = box;
                     cb.y_min = box.y_min - st_.offset;
                     cb.y_max = cb.y_min + content - 1;
+                    if (reserve_scrollbar_ && st_.max_offset > 0 && cb.x_max > cb.x_min)
+                        --cb.x_max;
                     children_[0]->SetBox(cb);
                 }
                 void Render(ftxui::Screen& screen) override
@@ -62,8 +67,9 @@ namespace
                 }
             private:
                 scroll_state& st_;
+                bool reserve_scrollbar_;
         };
-        return [&st](ftxui::Element child)
-        {   return std::make_shared<Impl>(std::move(child), st); };
+        return [&st, reserve_scrollbar](ftxui::Element child)
+        {   return std::make_shared<Impl>(std::move(child), st, reserve_scrollbar); };
     }
 }

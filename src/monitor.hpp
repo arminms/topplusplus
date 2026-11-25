@@ -10,6 +10,7 @@
 #include <hwinfo/hwinfo.h>
 
 #include "circular_buffer.hpp"
+#include "sysproc.hpp"
 
 struct monitor
 {   struct snapshot
@@ -17,6 +18,7 @@ struct monitor
         hwinfo::result<std::vector<hwinfo::Hertz>> frequencies;
         std::vector<hwinfo::result<hwinfo::GpuStatus>> gpus;
         hwinfo::result<hwinfo::MemoryUsage> memory;
+        std::vector<sysproc::process_info> processes;
         // std::vector<std::pair<std::filesystem::path, hwinfo::result<hwinfo::DiskSpace>>> disks;
     };
 
@@ -41,11 +43,16 @@ struct monitor
         {   tick_count_ = 0;
             last_snapshot_ = take_snapshot();
             record_history();
+            ++snapshot_generation_;
         }
     }
 
     const snapshot& operator()() const
     {   return last_snapshot_;
+    }
+
+    std::size_t snapshot_generation() const
+    {   return snapshot_generation_;
     }
 
     // Load history (one buffer per CPU thread), oldest sample first.
@@ -77,7 +84,9 @@ struct monitor
         {   .cpu = cpu_sampler_->sample()
         ,   .frequencies = hwinfo::cpu_frequencies()
         ,   .memory = hwinfo::memory_usage()
+        ,   .processes = process_sampler_.sample()
         };
+        sysproc::sort_processes(current.processes, sysproc::sort_by::cpu_percent);
         for (std::size_t i = 0; i < gpu_samplers_.size(); ++i)
         {   auto status = gpu_samplers_[i].sample();
             // Non-discrete GPUs use system RAM, so report that instead
@@ -124,7 +133,9 @@ private:
 
     std::size_t tick_max_;
     std::size_t tick_count_;
+    std::size_t snapshot_generation_ = 0;
     std::unique_ptr<hwinfo::CpuSampler> cpu_sampler_;
+    sysproc::process_monitor process_sampler_;
     hwinfo::result<hwinfo::Memory> memory_info_;
     std::vector<hwinfo::GpuSampler> gpu_samplers_;
     std::vector<hwinfo::GpuType> gpu_types_;
