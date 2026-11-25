@@ -32,15 +32,19 @@ TEST_CASE("Process table shows sampled information and adapts to width")
     process.args = {"worker", "--test"};
     const std::vector processes{process};
 
-    const auto compact = render(detail::prc_content(processes, 80), 80);
+    const auto compact = render
+    (   detail::prc_content(processes, 80, 1024ull * 1024 * 1024), 80
+    );
     REQUIRE(compact.find("123") != std::string::npos);
     REQUIRE(compact.find("alice") != std::string::npos);
     REQUIRE(compact.find("125.5") != std::string::npos);
-    REQUIRE(compact.find("32.0") != std::string::npos);
+    REQUIRE(compact.find("3.1") != std::string::npos);
     REQUIRE(compact.find("worker --test") != std::string::npos);
     REQUIRE(compact.find("READ KiB/s") == std::string::npos);
 
-    const auto wide = render(detail::prc_content(processes, 160), 160);
+    const auto wide = render
+    (   detail::prc_content(processes, 160, 1024ull * 1024 * 1024), 160
+    );
     REQUIRE(wide.find("Running") != std::string::npos);
     REQUIRE(wide.find("READ KiB/s") != std::string::npos);
     REQUIRE(wide.find("WRITE KiB/s") != std::string::npos);
@@ -51,7 +55,7 @@ TEST_CASE("Process table shows sampled information and adapts to width")
     REQUIRE(narrow.find("123") != std::string::npos);
     REQUIRE(narrow.find("125.5") != std::string::npos);
     REQUIRE(narrow.find("worker") != std::string::npos);
-    REQUIRE(narrow.find("MEM MiB") == std::string::npos);
+    REQUIRE(narrow.find("MEM%") == std::string::npos);
 }
 
 TEST_CASE("Process table handles empty snapshots and scrolling")
@@ -139,10 +143,12 @@ TEST_CASE("Process table keeps large numeric values readable")
     process.cpu_percent = 123456789.0;
     process.memory_bytes = UINT64_MAX;
     process.name = "worker";
-    const auto output = render(detail::prc_content({process}, 100), 100);
+    const auto output = render
+    (   detail::prc_content({process}, 100, 1024ull * 1024 * 1024), 100
+    );
     REQUIRE(output.find("4294967295") != std::string::npos);
     REQUIRE(output.find("1.2e+08") != std::string::npos);
-    REQUIRE(output.find("1.8e+13") != std::string::npos);
+    REQUIRE(output.find("1.7e+10") != std::string::npos);
     REQUIRE(output.find("worker") != std::string::npos);
 }
 
@@ -218,7 +224,7 @@ TEST_CASE("Process table adds left padding to every column")
     const auto row = line(3);
     INFO(header << "\n" << row);
     REQUIRE(header.find
-    (   "│ PID  USER  STATE    THR  CPU%  MEM MiB  TIME s  READ KiB/s  WRITE KiB/s  COMMAND"
+    (   "│ PID  USER  STATE    THR  CPU%  MEM%     TIME s  READ KiB/s  WRITE KiB/s  COMMAND"
     ) != std::string::npos);
     REQUIRE(row.find("│ 123  user  Running  123  12.3") != std::string::npos);
     REQUIRE(row.find("  worker") != std::string::npos);
@@ -345,7 +351,10 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
         auto screen = ftxui::Screen::Create
         (   ftxui::Dimension::Fixed(width), ftxui::Dimension::Fixed(6)
         );
-        ftxui::Render(screen, detail::prc_content({first, second}, width));
+        ftxui::Render
+        (   screen
+        ,   detail::prc_content({first, second}, width, 1000ull * 1024 * 1024)
+        );
         const auto line = [&](int y)
         {   std::string result;
             for (int x = 0; x < width; ++x)
@@ -371,7 +380,7 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
         check("PID", "1", "123456");
         check("CPU%", "1.0", "1234.5");
         if (width >= 60)
-        {   check("MEM MiB", "1.0", "123456.0");
+        {   check("MEM%", "0.1", "12345.6");
             check("TIME s", "3.0", "12345.6");
         }
         if (width >= 100)

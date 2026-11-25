@@ -123,7 +123,12 @@ int main()
     (   [&]
         {   if (!prc_table || prc_generation != monitors.snapshot_generation()
                 || prc_width != screen.dimx())
-            {   prc_table = detail::prc_content(monitors().processes, screen.dimx());
+        {   const auto total_memory_bytes = monitors().memory
+                ? monitors().memory->total.value
+                : 0;
+            prc_table = detail::prc_content
+            (   monitors().processes, screen.dimx(), total_memory_bytes
+            );
                 prc_generation = monitors.snapshot_generation();
                 prc_width = screen.dimx();
             }

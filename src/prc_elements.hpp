@@ -39,6 +39,7 @@ inline std::string process_number(double value, std::size_t width)
 
 inline ftxui::Element prc_content
 (   const std::vector<sysproc::process_info>& processes, int width
+,   uint64_t total_memory_bytes = 0
 )
 {   using namespace ftxui;
     if (processes.empty())
@@ -77,7 +78,18 @@ inline ftxui::Element prc_content
         if (process)
             row.back() = std::move(row.back()) | color(load_color(process->cpu_percent / 100.0));
         if (show_details)
-        {   cell(process ? process_number(process->memory_bytes / 1048576.0, 9) : "MEM MiB", 9, true);
+        {   cell
+            (   process
+                    ?   total_memory_bytes
+                        ?   process_number
+                            (   static_cast<double>(process->memory_bytes)
+                                / static_cast<double>(total_memory_bytes) * 100.0
+                            ,   9
+                            )
+                        :   "--"
+                    :   "MEM%"
+            ,   9, true
+            );
             cell(process ? process_number(process->cpu_time_sec, 8) : "TIME s", 8, true);
         }
         if (show_io)
