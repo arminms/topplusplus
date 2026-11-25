@@ -127,7 +127,8 @@ int main()
                 prc_generation = monitors.snapshot_generation();
                 prc_width = screen.dimx();
             }
-            return prc_table | scroll_view(prc_scroll, true) | flex;
+            constexpr int header_lines = 3; // Top border, header, and separator.
+            return prc_table | scroll_view(prc_scroll, true, header_lines) | flex;
         }
     );
 

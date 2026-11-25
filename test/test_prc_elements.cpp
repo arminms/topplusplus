@@ -64,14 +64,64 @@ TEST_CASE("Process table handles empty snapshots and scrolling")
     }
     scroll_state scroll;
     auto draw = [&]
-    {   return render(detail::prc_content(processes, 80) | scroll_view(scroll, true), 80, 5);
+    {   return render(detail::prc_content(processes, 80) | scroll_view(scroll, true, 3), 80, 5);
     };
     REQUIRE(draw().find("worker1") != std::string::npos);
     REQUIRE(scroll.max_offset > 0);
+    REQUIRE(scroll.view_height == 2);
     scroll.offset = scroll.max_offset;
     const auto bottom = draw();
+    REQUIRE(bottom.find("PID") != std::string::npos);
+    REQUIRE(bottom.find("COMMAND") != std::string::npos);
     REQUIRE(bottom.find("worker20") != std::string::npos);
     REQUIRE(bottom.find("worker1 ") == std::string::npos);
+}
+
+TEST_CASE("Process table keeps its header aligned while scrolling")
+{   std::vector<sysproc::process_info> processes(20);
+    for (std::size_t i = 0; i < processes.size(); ++i)
+    {   processes[i].pid = i == processes.size() - 1 ? 123456 : 1;
+        processes[i].cpu_percent = i == processes.size() - 1 ? 1234.5 : 1.0;
+        processes[i].name = "worker" + std::to_string(i + 1);
+    }
+    for (const int width : {35, 80, 110, 160})
+    {   INFO("width: " << width);
+        scroll_state scroll;
+        const auto draw = [&]
+        {   auto screen = ftxui::Screen::Create
+            (   ftxui::Dimension::Fixed(width), ftxui::Dimension::Fixed(7)
+            );
+            ftxui::Render(screen, detail::prc_content(processes, width) | scroll_view(scroll, true, 3));
+            return screen;
+        };
+        const auto line = [&](ftxui::Screen& screen, int y)
+        {   std::string result;
+            for (int x = 0; x < width; ++x)
+            {   const auto& character = screen.PixelAt(x, y).character;
+                result += character.empty() ? " " : character;
+            }
+            return result;
+        };
+        auto top = draw();
+        REQUIRE(scroll.max_offset > 0);
+        const auto header = line(top, 1);
+        scroll.offset = scroll.max_offset;
+        auto bottom = draw();
+        REQUIRE(line(bottom, 1) == header);
+        REQUIRE(line(bottom, 0) == line(top, 0));
+        REQUIRE(line(bottom, 2) == line(top, 2));
+        const auto row = line(bottom, 5);
+        INFO(header << "\n" << row);
+        for (const auto& [label, value] : std::vector<std::pair<std::string, std::string>>
+             {{"PID", "123456"}, {"CPU%", "1234.5"}})
+        {   const auto position = header.find(label);
+            REQUIRE(position != std::string::npos);
+            const auto end = position + label.size();
+            REQUIRE(end >= value.size());
+            REQUIRE(row.substr(end - value.size(), value.size()) == value);
+        }
+        REQUIRE(row.find("worker20") != std::string::npos);
+    }
 }
 
 TEST_CASE("Process command falls back to name and removes control characters")
@@ -347,7 +397,7 @@ TEST_CASE("Process table border remains visible beside the scrollbar")
     {   auto screen = ftxui::Screen::Create
         (   ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(5)
         );
-        ftxui::Render(screen, detail::prc_content(processes, 80) | scroll_view(scroll, true));
+        ftxui::Render(screen, detail::prc_content(processes, 80) | scroll_view(scroll, true, 3));
         return screen;
     };
     auto top = draw();
