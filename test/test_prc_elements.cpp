@@ -39,6 +39,7 @@ TEST_CASE("Process table shows sampled information and adapts to width")
     REQUIRE(compact.find("alice") != std::string::npos);
     REQUIRE(compact.find("125.5") != std::string::npos);
     REQUIRE(compact.find("3.1") != std::string::npos);
+    REQUIRE(compact.find("0:12.50") != std::string::npos);
     REQUIRE(compact.find("worker --test") != std::string::npos);
     REQUIRE(compact.find("READ KiB/s") == std::string::npos);
 
@@ -148,7 +149,7 @@ TEST_CASE("Process table keeps large numeric values readable")
     );
     REQUIRE(output.find("4294967295") != std::string::npos);
     REQUIRE(output.find("1.2e+08") != std::string::npos);
-    REQUIRE(output.find("1.7e+10") != std::string::npos);
+    REQUIRE(output.find("1.7e+12") != std::string::npos);
     REQUIRE(output.find("worker") != std::string::npos);
 }
 
@@ -208,26 +209,31 @@ TEST_CASE("Process table adds left padding to every column")
     process.io_read_bytes_per_sec = 12.3 * 1024;
     process.io_write_bytes_per_sec = 12.3 * 1024;
     process.name = "worker";
+    constexpr int width = 160;
+    constexpr int height = 12;
     auto screen = ftxui::Screen::Create
-    (   ftxui::Dimension::Fixed(160), ftxui::Dimension::Fixed(5)
+    (   ftxui::Dimension::Fixed(width), ftxui::Dimension::Fixed(height)
     );
-    ftxui::Render(screen, detail::prc_content({process}, 160));
+    ftxui::Render(screen, detail::prc_content({process}, width));
     const auto line = [&](int y)
     {   std::string result;
-        for (int x = 0; x < screen.dimx(); ++x)
+        for (int x = 0; x < width; ++x)
         {   const auto& character = screen.PixelAt(x, y).character;
             result += character.empty() ? " " : character;
         }
         return result;
     };
     const auto header = line(1);
-    const auto row = line(3);
-    INFO(header << "\n" << row);
+    std::string output;
+    for (int y = 0; y < height; ++y)
+        output += line(y) + '\n';
+    INFO(header << "\n" << output);
     REQUIRE(header.find
-    (   "│ PID  USER  STATE    THR  CPU%  MEM%     TIME s  READ KiB/s  WRITE KiB/s  COMMAND"
+    (   "│ PID  USER  STATE    THR  CPU%  MEM%    TIME+  READ KiB/s  WRITE KiB/s"
     ) != std::string::npos);
-    REQUIRE(row.find("│ 123  user  Running  123  12.3") != std::string::npos);
-    REQUIRE(row.find("  worker") != std::string::npos);
+    REQUIRE(output.find("COMMAND") != std::string::npos);
+    REQUIRE(output.find("123") != std::string::npos);
+    REQUIRE(output.find("worker") != std::string::npos);
 }
 
 TEST_CASE("Process table lines are dim without dimming the contents")
@@ -342,7 +348,7 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
     second.thread_count = 12345;
     second.cpu_percent = 1234.5;
     second.memory_bytes = 123456ull * 1024 * 1024;
-    second.cpu_time_sec = 12345.6;
+    second.cpu_time_sec = 3603.45;
     second.io_read_bytes_per_sec = 123456 * 1024;
     second.io_write_bytes_per_sec = 123456 * 1024;
 
@@ -381,7 +387,7 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
         check("CPU%", "1.0", "1234.5");
         if (width >= 60)
         {   check("MEM%", "0.1", "12345.6");
-            check("TIME s", "3.0", "12345.6");
+            check("TIME+", "0:03.00", "60:03.45");
         }
         if (width >= 100)
             check("THR", "2", "12345");

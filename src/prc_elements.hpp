@@ -4,6 +4,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <string>
 #include <vector>
@@ -35,6 +36,13 @@ inline std::string process_command(const sysproc::process_info& process)
 inline std::string process_number(double value, std::size_t width)
 {   auto formatted = std::format("{:.1f}", value);
     return formatted.size() <= width ? formatted : std::format("{:.1e}", value);
+}
+
+inline std::string process_time(double seconds)
+{   const auto centiseconds = static_cast<uint64_t>(std::round(seconds * 100.0));
+    const auto minutes = centiseconds / 6000;
+    const auto seconds_in_minute = (centiseconds % 6000) / 100.0;
+    return std::format("{}:{:05.2f}", minutes, seconds_in_minute);
 }
 
 inline ftxui::Element prc_content
@@ -90,7 +98,7 @@ inline ftxui::Element prc_content
                     :   "MEM%"
             ,   9, true
             );
-            cell(process ? process_number(process->cpu_time_sec, 8) : "TIME s", 8, true);
+            cell(process ? process_time(process->cpu_time_sec) : "TIME+", 8, true);
         }
         if (show_io)
         {   cell(process ? process_number(process->io_read_bytes_per_sec / 1024.0, 10) : "READ KiB/s", 10, true);
