@@ -122,7 +122,10 @@ int main()
     int prc_width = -1;
     auto prc_tab = Renderer
     (   [&]
-        {   if (!prc_table || prc_generation != monitors.snapshot_generation()
+        {   if (const auto selected_pid = monitors.selected_process_pid())
+            {   prc_sort.selected_pid = selected_pid;
+            }
+            if (!prc_table || prc_generation != monitors.snapshot_generation()
                 || prc_width != screen.dimx())
         {   const auto total_memory_bytes = monitors().memory
                 ? monitors().memory->total.value
@@ -133,8 +136,36 @@ int main()
                 prc_generation = monitors.snapshot_generation();
                 prc_width = screen.dimx();
             }
+            std::optional<double> process_cpu;
+            std::optional<double> process_ram;
+            if (prc_sort.selected_pid)
+            {   for (const auto& process : monitors().processes)
+                {   if (process.pid != *prc_sort.selected_pid)
+                        continue;
+                    process_cpu = std::isfinite(process.cpu_percent)
+                        ? std::optional<double>(process.cpu_percent / 100.0)
+                        : std::nullopt;
+                    if (monitors().memory
+                        && monitors().memory->total.value > 0)
+                        process_ram = static_cast<double>(process.memory_bytes)
+                            / static_cast<double>(monitors().memory->total.value);
+                    break;
+                }
+            }
+            auto process_plot = detail::process_usage_plot
+            (   process_cpu
+            ,   process_ram
+            ,   monitors.process_cpu_history()
+            ,   monitors.process_ram_history()
+            );
             constexpr int header_lines = 3; // Top border, header, and separator.
-            return prc_table | scroll_view(prc_scroll, true, header_lines) | flex;
+            return vbox
+            (   {   std::move(process_plot)
+                ,   prc_table
+                    | scroll_view(prc_scroll, true, header_lines)
+                    | flex
+                }
+            ) | flex;
         }
     );
 
@@ -277,6 +308,14 @@ int main()
             {   if (tab_index == prc_tab_index
                     && detail::prc_sort_click(e, prc_scroll, prc_sort))
                 {   prc_table = nullptr;
+                    return true;
+                }
+                if (tab_index == prc_tab_index
+                    && detail::prc_row_click
+                        (e, prc_scroll, monitors().processes, prc_sort))
+                {   if (prc_sort.selected_pid)
+                        monitors.select_process(*prc_sort.selected_pid);
+                    prc_table = nullptr;
                     return true;
                 }
                 if (!scroll.view.Contain(e.mouse().x, e.mouse().y))

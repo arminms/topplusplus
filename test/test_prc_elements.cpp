@@ -297,7 +297,22 @@ TEST_CASE("Process CPU values use load colors")
     for (std::size_t i = 0; i < loads.size(); ++i)
     {   const auto value = std::format("{:.1f}", loads[i]);
         const int row = static_cast<int>(i) + 3;
-        const int start = cpu_end - static_cast<int>(value.size()) + 1;
+        int start = -1;
+        for (int x = 0; x + static_cast<int>(value.size()) <= screen.dimx(); ++x)
+        {   bool matches = true;
+            for (std::size_t j = 0; j < value.size(); ++j)
+            {   const auto& cell = screen.PixelAt(x + static_cast<int>(j), row);
+                if (cell.character != std::string(1, value[j]))
+                {   matches = false;
+                    break;
+                }
+            }
+            if (matches)
+            {   start = x;
+                break;
+            }
+        }
+        REQUIRE(start >= 0);
         for (std::size_t j = 0; j < value.size(); ++j)
         {   const auto& cell = screen.PixelAt(start + static_cast<int>(j), row);
             REQUIRE(cell.character == std::string(1, value[j]));

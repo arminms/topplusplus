@@ -6,6 +6,8 @@
 #include <concepts>
 #include <type_traits>
 
+#pragma once
+
 template <typename T>
 struct circular_buffer_64
 {   constexpr circular_buffer_64() noexcept = default;

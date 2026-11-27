@@ -15,6 +15,7 @@
 #include <ftxui/ftxui.hpp>
 
 #include "commons.hpp"
+#include "circular_buffer.hpp"
 #include "scroll_view.hpp"
 #include "sysproc.hpp"
 
@@ -72,6 +73,116 @@ inline std::string process_io_rate(double bytes_per_sec, std::size_t width)
     return std::format("{:.1e} {}", value, unit);
 }
 
+inline ftxui::Element process_usage_plot
+(   std::optional<double> cpu_load
+,   std::optional<double> ram_load
+,   const circular_buffer_64<std::optional<double>>& cpu_history
+,   const circular_buffer_64<std::optional<double>>& ram_history
+)
+{
+    using namespace ftxui;
+    auto plot = canvas
+    ([&cpu_history, &ram_history, cpu_load, ram_load](Canvas& c)
+    {   paint_background(c);
+        constexpr int legend_rows = 2;
+        constexpr int cell_height = 4;
+        constexpr int top = legend_rows * cell_height;
+        constexpr int axis_px = 8;
+        const int width = c.width();
+        const int height = c.height();
+        if (width <= axis_px + 1 || height <= top + 1)
+            return;
+
+        c.DrawText(0, 0, "■",
+                   cpu_load ? load_color(*cpu_load) : Color::Default);
+        c.DrawText(4, 0, "CPU");
+        if (cpu_load)
+            c.DrawText(16, 0,
+                       std::format("{:.1f}%", (*cpu_load) * 100.0),
+                       load_color(*cpu_load));
+        else
+            c.DrawText(16, 0, "unavailable");
+
+        c.DrawText(0, cell_height, "■", graph_color);
+        c.DrawText(4, cell_height, "RAM");
+        if (ram_load)
+            c.DrawText(16, cell_height,
+                       std::format("{:.1f}%", (*ram_load) * 100.0),
+                       graph_color);
+        else
+            c.DrawText(16, cell_height, "unavailable");
+
+        const auto y = [height](double value)
+        {   return top + static_cast<int>
+            (std::lround((1.0 - std::clamp(value, 0.0, 1.0))
+                         * (height - 1 - top)));
+        };
+        int previous_row = -1;
+        for (const int percent : {100, 75, 50, 25, 0})
+        {   const int row = y(percent / 100.0) / cell_height;
+            if (row == previous_row)
+                continue;
+            previous_row = row;
+            const auto marker = std::to_string(percent);
+            c.DrawText(2 * (3 - static_cast<int>(marker.size())),
+                       row * cell_height, marker, Color::White);
+        }
+
+        const int plot_width = width - axis_px;
+        const auto trace = [&](const auto& history, const auto& shade)
+        {   const std::size_t n = std::min(history.size(), detail::window);
+            std::optional<std::pair<int, int>> previous;
+            double previous_value = 0.0;
+            for (std::size_t k = 0; k < n; ++k)
+            {   const auto current = history[history.size() - n + k];
+                if (!current)
+                {   previous.reset();
+                    continue;
+                }
+                const int x = width - 1 - static_cast<int>
+                    (std::lround(double(n - 1 - k) * (plot_width - 1)
+                                  / (detail::window - 1)));
+                const std::pair<int, int> point{x, y(*current)};
+                if (previous)
+                {   const int dx = point.first - previous->first;
+                    const int dy = point.second - previous->second;
+                    const int steps = std::max({std::abs(dx), std::abs(dy), 1});
+                    const auto at = [&](int i)
+                    {   return std::pair
+                        {   previous->first + static_cast<int>
+                            (std::lround(double(dx) * i / steps))
+                        ,   previous->second + static_cast<int>
+                            (std::lround(double(dy) * i / steps))
+                        };
+                    };
+                    for (int i = 0; i < steps; ++i)
+                    {   const auto from = at(i);
+                        const auto to = at(i + 1);
+                        c.DrawPointLine(from.first, from.second,
+                                        to.first, to.second,
+                                        shade(previous_value
+                                            + (*current - previous_value)
+                                            * (i + 0.5) / steps));
+                    }
+                }
+                else
+                    c.DrawPoint(point.first, point.second, true, shade(*current));
+                previous = point;
+                previous_value = *current;
+            }
+        };
+        trace(cpu_history,
+              [](double load) { return load_color(load); });
+        trace(ram_history,
+              [](double) { return graph_color; });
+    }) | flex;
+
+    return hbox({text(" "), std::move(plot), text(" ")})
+        | border
+        | size(HEIGHT, GREATER_THAN, 10)
+        | size(HEIGHT, LESS_THAN, 15);
+}
+
 inline std::string process_time
 (   sysproc::time_point start_time
 ,   sysproc::time_point now = std::chrono::time_point_cast<std::chrono::microseconds>
@@ -97,9 +208,63 @@ enum class prc_column
 struct prc_sort_state
 {   std::optional<prc_column> column;
     bool descending = true;
+    std::optional<uint32_t> selected_pid;
     std::array<ftxui::Box, static_cast<std::size_t>(prc_column::count)> headers;
     std::vector<prc_column> visible;
 };
+
+inline bool prc_row_click
+(   ftxui::Event event
+,   const scroll_state& scroll
+,   const std::vector<sysproc::process_info>& processes
+,   prc_sort_state& sort
+,   uint64_t total_memory_bytes = 0
+)
+{
+    (void)total_memory_bytes;
+    using namespace ftxui;
+    if (!event.is_mouse())
+        return false;
+    const auto& mouse = event.mouse();
+    if (mouse.button != Mouse::Left || mouse.motion != Mouse::Pressed
+        || !scroll.view.Contain(mouse.x, mouse.y))
+        return false;
+    constexpr int header_lines = 3;
+    const int first_row_y = scroll.view.y_min + header_lines;
+    if (mouse.y < first_row_y)
+        return false;
+    const std::size_t row_index
+        = static_cast<std::size_t>(mouse.y - first_row_y + scroll.offset);
+    if (row_index >= processes.size())
+        return false;
+
+    std::vector<const sysproc::process_info*> ordered;
+    ordered.reserve(processes.size());
+    for (const auto& process : processes)
+        ordered.push_back(&process);
+    if (sort.column)
+    {   const auto less = [column = *sort.column](const auto* a, const auto* b)
+        {   switch (column)
+            {   case prc_column::pid:     return a->pid < b->pid;
+                case prc_column::user:    return a->username < b->username;
+                case prc_column::state:   return std::string_view(sysproc::to_string(a->state)) < sysproc::to_string(b->state);
+                case prc_column::threads: return a->thread_count < b->thread_count;
+                case prc_column::cpu:     return a->cpu_percent < b->cpu_percent;
+                case prc_column::memory:  return a->memory_bytes < b->memory_bytes;
+                case prc_column::time:    return a->start_time < b->start_time;
+                case prc_column::read:    return a->io_read_bytes_per_sec < b->io_read_bytes_per_sec;
+                case prc_column::write:   return a->io_write_bytes_per_sec < b->io_write_bytes_per_sec;
+                case prc_column::command: return process_command(*a) < process_command(*b);
+                case prc_column::count:   return false;
+            }
+            return false;
+        };
+        std::stable_sort(ordered.begin(), ordered.end(), [&](const auto* a, const auto* b)
+        {   return sort.descending ? less(b, a) : less(a, b); });
+    }
+    sort.selected_pid = ordered[row_index]->pid;
+    return true;
+}
 
 inline bool prc_sort_click
 (   ftxui::Event event, const scroll_state& scroll, prc_sort_state& sort
@@ -170,6 +335,8 @@ inline ftxui::Element prc_content
         std::stable_sort(ordered.begin(), ordered.end(), [&](const auto& a, const auto& b)
         {   return sort->descending ? less(b, a) : less(a, b); });
     }
+    if (sort && !sort->selected_pid && !ordered.empty())
+        sort->selected_pid = ordered.front().process->pid;
 
     const bool show_details = width >= 60;
     const bool show_state = width >= 100;
@@ -236,6 +403,10 @@ inline ftxui::Element prc_content
                 command = (sort->descending ? "▼ " : "▲ ") + command;
         }
         commands.push_back(std::move(command));
+        if (process && sort && sort->selected_pid == process->pid)
+        {   for (auto& element : row)
+                element = std::move(element) | bgcolor(Color::RGB(73, 77, 103));
+        }
         return row;
     };
     rows.push_back(make_row(nullptr));
