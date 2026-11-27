@@ -403,10 +403,6 @@ inline ftxui::Element prc_content
                 command = (sort->descending ? "▼ " : "▲ ") + command;
         }
         commands.push_back(std::move(command));
-        if (process && sort && sort->selected_pid == process->pid)
-        {   for (auto& element : row)
-                element = std::move(element) | bgcolor(Color::RGB(73, 77, 103));
-        }
         return row;
     };
     rows.push_back(make_row(nullptr));
@@ -434,6 +430,14 @@ inline ftxui::Element prc_content
         }
     );
     table.SelectColumn(-1).DecorateCells(xflex);
+    if (sort && sort->selected_pid)
+        for (std::size_t i = 0; i < ordered.size(); ++i)
+            if (ordered[i].process->pid == *sort->selected_pid)
+            {   const auto highlight = bgcolor(Color::RGB(73, 77, 103));
+                auto selected = table.SelectRow(static_cast<int>(i + 1));
+                selected.DecorateCells(highlight);
+                selected.DecorateSeparatorVertical(highlight);
+            }
     if (sort)
         for (std::size_t i = 0; i < sort->visible.size(); ++i)
             table.SelectCell(static_cast<int>(i), 0).DecorateCells

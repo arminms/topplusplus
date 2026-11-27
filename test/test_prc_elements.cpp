@@ -201,6 +201,49 @@ TEST_CASE("Process table has spaces instead of vertical separators")
     REQUIRE(output.find("123  alice") != std::string::npos);
 }
 
+TEST_CASE("Process selection highlights the entire row")
+{   std::vector<sysproc::process_info> processes(2);
+    processes[0].pid = 1;
+    processes[0].name = "first";
+    processes[1].pid = 2;
+    processes[1].name = "second";
+    processes[1].cpu_percent = 50;
+    detail::prc_sort_state sort;
+    scroll_state scroll;
+    const auto draw = [&]
+    {   auto screen = ftxui::Screen::Create
+        (   ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(6)
+        );
+        ftxui::Render
+        (   screen, detail::prc_content(processes, 80, 0, &sort)
+                    | scroll_view(scroll, true, 3)
+        );
+        return screen;
+    };
+    auto screen = draw();
+    ftxui::Mouse mouse;
+    mouse.button = ftxui::Mouse::Left;
+    mouse.motion = ftxui::Mouse::Pressed;
+    mouse.x = 10;
+    mouse.y = scroll.view.y_min + 4;
+    REQUIRE(detail::prc_row_click(ftxui::Event::Mouse("", mouse), scroll, processes, sort));
+    REQUIRE(sort.selected_pid == 2);
+    screen = draw();
+    const auto highlight = ftxui::Color::RGB(73, 77, 103);
+    for (int x = 1; x < 79; ++x)
+    {   INFO("column " << x);
+        REQUIRE(screen.PixelAt(x, 4).background_color == highlight);
+        REQUIRE(screen.PixelAt(x, 3).background_color != highlight);
+    }
+    bool cpu_color_seen = false;
+    for (int x = 1; x < 79; ++x)
+        if (screen.PixelAt(x, 4).foreground_color == detail::load_color(0.5))
+            cpu_color_seen = true;
+    REQUIRE(cpu_color_seen);
+    REQUIRE(screen.PixelAt(0, 4).background_color != highlight);
+    REQUIRE(screen.PixelAt(79, 4).background_color != highlight);
+}
+
 TEST_CASE("Process table adds left padding to every column")
 {   sysproc::process_info process;
     process.pid = 123;
