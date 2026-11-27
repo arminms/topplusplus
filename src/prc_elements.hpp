@@ -74,7 +74,8 @@ inline std::string process_io_rate(double bytes_per_sec, std::size_t width)
 }
 
 inline ftxui::Element process_usage_plot
-(   std::optional<double> cpu_load
+(   std::optional<uint32_t> pid
+,   std::optional<double> cpu_load
 ,   std::optional<double> ram_load
 ,   const circular_buffer_64<std::optional<double>>& cpu_history
 ,   const circular_buffer_64<std::optional<double>>& ram_history
@@ -82,9 +83,9 @@ inline ftxui::Element process_usage_plot
 {
     using namespace ftxui;
     auto plot = canvas
-    ([&cpu_history, &ram_history, cpu_load, ram_load](Canvas& c)
+    ([&cpu_history, &ram_history, pid, cpu_load, ram_load](Canvas& c)
     {   paint_background(c);
-        constexpr int legend_rows = 2;
+        constexpr int legend_rows = 1;
         constexpr int cell_height = 4;
         constexpr int top = legend_rows * cell_height;
         constexpr int axis_px = 8;
@@ -93,24 +94,32 @@ inline ftxui::Element process_usage_plot
         if (width <= axis_px + 1 || height <= top + 1)
             return;
 
-        c.DrawText(0, 0, "■",
+        int legend_x = 0;
+        const auto text = [&](std::string_view value)
+        {   c.DrawText(legend_x, 0, value);
+            legend_x += 2 * string_width(value);
+        };
+        const auto separator = [&]
+        {   c.DrawText(legend_x, 0, " | ", [](Cell& cell) { cell.dim = true; });
+            legend_x += 6;
+        };
+        text(pid ? std::format("PID: {}", *pid) : "PID: unavailable");
+        separator();
+        c.DrawText(legend_x, 0, "■", cpu_load ? load_color(*cpu_load) : Color::Default);
+        legend_x += 2;
+        text(" CPU: ");
+        const auto cpu_value = cpu_load
+            ? std::format("{:.1f}%", *cpu_load * 100.0) : "unavailable";
+        c.DrawText(legend_x, 0, cpu_value,
                    cpu_load ? load_color(*cpu_load) : Color::Default);
-        c.DrawText(4, 0, "CPU");
-        if (cpu_load)
-            c.DrawText(16, 0,
-                       std::format("{:.1f}%", (*cpu_load) * 100.0),
-                       load_color(*cpu_load));
-        else
-            c.DrawText(16, 0, "unavailable");
-
-        c.DrawText(0, cell_height, "■", graph_color);
-        c.DrawText(4, cell_height, "RAM");
-        if (ram_load)
-            c.DrawText(16, cell_height,
-                       std::format("{:.1f}%", (*ram_load) * 100.0),
-                       graph_color);
-        else
-            c.DrawText(16, cell_height, "unavailable");
+        legend_x += 2 * string_width(cpu_value);
+        separator();
+        c.DrawText(legend_x, 0, "■", graph_color);
+        legend_x += 2;
+        text(" RAM: ");
+        const auto ram_value = ram_load
+            ? std::format("{:.1f}%", *ram_load * 100.0) : "unavailable";
+        c.DrawText(legend_x, 0, ram_value, graph_color);
 
         const auto y = [height](double value)
         {   return top + static_cast<int>
@@ -118,7 +127,7 @@ inline ftxui::Element process_usage_plot
                          * (height - 1 - top)));
         };
         int previous_row = -1;
-        for (const int percent : {100, 75, 50, 25, 0})
+        for (const int percent : {100, 50, 0})
         {   const int row = y(percent / 100.0) / cell_height;
             if (row == previous_row)
                 continue;

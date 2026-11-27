@@ -153,7 +153,8 @@ int main()
                 }
             }
             auto process_plot = detail::process_usage_plot
-            (   process_cpu
+            (   monitors.selected_process_pid()
+            ,   process_cpu
             ,   process_ram
             ,   monitors.process_cpu_history()
             ,   monitors.process_ram_history()
@@ -173,19 +174,19 @@ int main()
 // Main container
 // -----------------------------------------------------------------------------
 
-    constexpr int sys_tab_index = 0;
+    constexpr int prc_tab_index = 0;
     constexpr int cpu_tab_index = 1;
     constexpr int gpu_tab_index = 2;
     const bool has_gpu_tab = !(gpus && gpus->empty());
     const int ram_tab_index = has_gpu_tab ? 3 : 2;
-    const int prc_tab_index = has_gpu_tab ? 4 : 3;
-    int tab_index = cpu_tab_index;
+    const int sys_tab_index = has_gpu_tab ? 4 : 3;
+    int tab_index = prc_tab_index;
     std::vector<std::string> tab_entries =
-    {   "  SYS  "
+    {   "  PRC  "
     ,   "  CPU  "
     ,   "  GPU  "
     ,   "  RAM  "
-    ,   "  PRC  "
+    ,   "  SYS  "
     };
     auto option = MenuOption::HorizontalAnimated();
     option.underline.color_inactive = Color::RGB(126, 133, 163);
@@ -198,11 +199,11 @@ int main()
     |   color(Color::RGB(197, 207, 245))
     ;
     auto tab_container = Container::Tab
-    (   {   sys_tab,
+    (   {   prc_tab,
             cpu_tab,
             gpu_tab,
             ram_tab,
-            prc_tab,
+            sys_tab,
         }
     ,   &tab_index
     );

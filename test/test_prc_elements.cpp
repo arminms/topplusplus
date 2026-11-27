@@ -18,6 +18,76 @@ std::string render(ftxui::Element element, int width, int height = 10)
 
 }
 
+TEST_CASE("Process plot shows PID and usage on one line")
+{   circular_buffer_64<std::optional<double>> cpu_history;
+    circular_buffer_64<std::optional<double>> ram_history;
+    const auto draw = [&](std::optional<uint32_t> pid, std::optional<double> cpu,
+                          std::optional<double> ram)
+    {   auto screen = ftxui::Screen::Create
+        (   ftxui::Dimension::Fixed(90), ftxui::Dimension::Fixed(12)
+        );
+        ftxui::Render
+        (   screen, detail::process_usage_plot(pid, cpu, ram, cpu_history, ram_history)
+        );
+        return screen;
+    };
+    const auto line = [](ftxui::Screen& screen, int y)
+    {   std::string result;
+        for (int x = 0; x < screen.dimx(); ++x)
+        {   const auto& character = screen.PixelAt(x, y).character;
+            result += character.empty() ? " " : character.size() > 1 ? "#" : character;
+        }
+        return result;
+    };
+    auto screen = draw(12345, 0.5, 0.25);
+    auto legend = line(screen, 1);
+    REQUIRE(legend.find("PID: 12345 | # CPU: 50.0% | # RAM: 25.0%") != std::string::npos);
+    const auto first_separator = legend.find(" | ");
+    const auto second_separator = legend.find(" | ", first_separator + 3);
+    REQUIRE(first_separator != std::string::npos);
+    REQUIRE(second_separator != std::string::npos);
+    for (const auto start : {first_separator, second_separator})
+        for (std::size_t x = start; x < start + 3; ++x)
+        {   INFO("legend: " << legend << ", separator cell " << x
+                 << ": " << screen.PixelAt(static_cast<int>(x), 1).character);
+            REQUIRE(screen.PixelAt(static_cast<int>(x), 1).dim);
+        }
+    const auto cpu = legend.find("50.0%");
+    const auto ram = legend.find("25.0%");
+    REQUIRE(screen.PixelAt(static_cast<int>(cpu), 1).foreground_color == detail::load_color(0.5));
+    REQUIRE(screen.PixelAt(static_cast<int>(ram), 1).foreground_color == detail::graph_color);
+
+    screen = draw(std::nullopt, std::nullopt, std::nullopt);
+    legend = line(screen, 1);
+    REQUIRE(legend.find("PID: unavailable | # CPU: unavailable | # RAM: unavailable")
+            != std::string::npos);
+}
+
+TEST_CASE("Process plot shows only 100, 50 and 0 axis markers")
+{   circular_buffer_64<std::optional<double>> history;
+    for (const int height : {10, 12, 15})
+    {   INFO("height " << height);
+        auto screen = ftxui::Screen::Create
+        (   ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(height)
+        );
+        ftxui::Render
+        (   screen, detail::process_usage_plot(1, 0.5, 0.25, history, history)
+        );
+        std::vector<std::string> markers;
+        for (int y = 2; y < height - 1; ++y)
+        {   std::string marker;
+            for (int x = 2; x < 5; ++x)
+            {   const auto& character = screen.PixelAt(x, y).character;
+                if (character >= "0" && character <= "9")
+                    marker += character;
+            }
+            if (!marker.empty())
+                markers.push_back(marker);
+        }
+        REQUIRE(markers == std::vector<std::string>{"100", "50", "0"});
+    }
+}
+
 TEST_CASE("Process table shows sampled information and adapts to width")
 {   sysproc::process_info process;
     process.pid = 123;
