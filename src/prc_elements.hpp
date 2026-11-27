@@ -72,11 +72,22 @@ inline std::string process_io_rate(double bytes_per_sec, std::size_t width)
     return std::format("{:.1e} {}", value, unit);
 }
 
-inline std::string process_time(double seconds)
-{   const auto centiseconds = static_cast<uint64_t>(std::round(seconds * 100.0));
-    const auto minutes = centiseconds / 6000;
-    const auto seconds_in_minute = (centiseconds % 6000) / 100.0;
-    return std::format("{}:{:05.2f}", minutes, seconds_in_minute);
+inline std::string process_time
+(   sysproc::time_point start_time
+,   sysproc::time_point now = std::chrono::time_point_cast<std::chrono::microseconds>
+        (std::chrono::system_clock::now())
+)
+{   if (start_time.time_since_epoch().count() == 0)
+        return "--:--:--";
+    const auto elapsed = now - start_time;
+    if (elapsed.count() < 0)
+        return "--:--:--";
+    const auto total_seconds
+        = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(elapsed).count());
+    const auto hours = total_seconds / 3600;
+    const auto minutes = (total_seconds % 3600) / 60;
+    const auto remaining_seconds = total_seconds % 60;
+    return std::format("{:02d}:{:02d}:{:02d}", hours, minutes, remaining_seconds);
 }
 
 enum class prc_column
@@ -148,7 +159,7 @@ inline ftxui::Element prc_content
                 case prc_column::threads: return x.thread_count < y.thread_count;
                 case prc_column::cpu:     return number_less(x.cpu_percent, y.cpu_percent);
                 case prc_column::memory:  return x.memory_bytes < y.memory_bytes;
-                case prc_column::time:    return number_less(x.cpu_time_sec, y.cpu_time_sec);
+                case prc_column::time:    return x.start_time < y.start_time;
                 case prc_column::read:    return number_less(x.io_read_bytes_per_sec, y.io_read_bytes_per_sec);
                 case prc_column::write:   return number_less(x.io_write_bytes_per_sec, y.io_write_bytes_per_sec);
                 case prc_column::command: return a.command < b.command;
@@ -212,7 +223,7 @@ inline ftxui::Element prc_content
                     :   "MEM%"
             ,   9, true
             );
-            cell(prc_column::time, process ? process_time(process->cpu_time_sec) : "TIME+", 8, true);
+            cell(prc_column::time, process ? process_time(process->start_time) : "ELAPSED", 10, true);
         }
         if (show_io)
         {   cell(prc_column::read, process ? process_io_rate(process->io_read_bytes_per_sec, 12) : "IO/R", 12, true);

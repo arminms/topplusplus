@@ -27,6 +27,9 @@ TEST_CASE("Process table shows sampled information and adapts to width")
     process.cpu_percent = 125.5;
     process.memory_bytes = 32 * 1024 * 1024;
     process.cpu_time_sec = 12.5;
+    process.start_time = std::chrono::time_point_cast<std::chrono::microseconds>
+        (std::chrono::system_clock::now())
+        - std::chrono::seconds(12);
     process.io_read_bytes_per_sec = 2048;
     process.io_write_bytes_per_sec = 3072;
     process.args = {"worker", "--test"};
@@ -39,7 +42,8 @@ TEST_CASE("Process table shows sampled information and adapts to width")
     REQUIRE(compact.find("alice") != std::string::npos);
     REQUIRE(compact.find("125.5") != std::string::npos);
     REQUIRE(compact.find("3.1") != std::string::npos);
-    REQUIRE(compact.find("0:12.50") != std::string::npos);
+    REQUIRE(compact.find("ELAPSED") != std::string::npos);
+    REQUIRE(compact.find("00:00:12") != std::string::npos);
     REQUIRE(compact.find("worker --test") != std::string::npos);
     REQUIRE(compact.find("IO/R") == std::string::npos);
 
@@ -339,6 +343,8 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
     first.cpu_percent = 1.0;
     first.memory_bytes = 1024 * 1024;
     first.cpu_time_sec = 3.0;
+    first.start_time = std::chrono::time_point_cast<std::chrono::microseconds>
+        (std::chrono::system_clock::now()) - std::chrono::seconds(3);
     first.io_read_bytes_per_sec = 1024;
     first.io_write_bytes_per_sec = 2048;
     first.name = "worker";
@@ -348,6 +354,8 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
     second.cpu_percent = 1234.5;
     second.memory_bytes = 123456ull * 1024 * 1024;
     second.cpu_time_sec = 3603.45;
+    second.start_time = std::chrono::time_point_cast<std::chrono::microseconds>
+        (std::chrono::system_clock::now()) - std::chrono::seconds(3603);
     second.io_read_bytes_per_sec = 123456 * 1024;
     second.io_write_bytes_per_sec = 123456 * 1024;
 
@@ -386,7 +394,7 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
         check("CPU%", "1.0", "1234.5");
         if (width >= 60)
         {   check("MEM%", "0.1", "12345.6");
-            check("TIME+", "0:03.00", "60:03.45");
+            check("ELAPSED", "00:00:03", "01:00:03");
         }
         if (width >= 100)
             check("THR", "2", "12345");
@@ -438,6 +446,8 @@ TEST_CASE("Process table sorts each visible column when clicked")
     first.cpu_time_sec = 20;
     first.io_read_bytes_per_sec = 200;
     first.io_write_bytes_per_sec = 200;
+    first.start_time = std::chrono::time_point_cast<std::chrono::microseconds>
+        (std::chrono::system_clock::now()) - std::chrono::seconds(20);
     first.args = {"z-command"};
     auto second = first;
     second.pid = 10;
@@ -449,13 +459,15 @@ TEST_CASE("Process table sorts each visible column when clicked")
     second.cpu_time_sec = 3;
     second.io_read_bytes_per_sec = 30;
     second.io_write_bytes_per_sec = 30;
+    second.start_time = std::chrono::time_point_cast<std::chrono::microseconds>
+        (std::chrono::system_clock::now()) - std::chrono::seconds(3);
     second.args = {"a-command"};
 
     for (const auto& [label, high_command] :
          std::vector<std::pair<std::string, std::string>>
          {{"PID", "a-command"}, {"USER", "z-command"}, {"STATE", "z-command"},
           {"THR", "z-command"}, {"CPU%", "z-command"}, {"MEM%", "z-command"},
-          {"TIME+", "z-command"}, {"IO/R", "z-command"},
+          {"ELAPSED", "a-command"}, {"IO/R", "z-command"},
           {"IO/W", "z-command"}, {"COMMAND", "z-command"}})
     {   INFO(label);
         detail::prc_sort_state sort;
