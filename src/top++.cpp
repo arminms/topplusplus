@@ -117,6 +117,7 @@ int main()
 // -----------------------------------------------------------------------------
 
     Element prc_table;
+    detail::prc_sort_state prc_sort;
     std::size_t prc_generation = 0;
     int prc_width = -1;
     auto prc_tab = Renderer
@@ -127,7 +128,7 @@ int main()
                 ? monitors().memory->total.value
                 : 0;
             prc_table = detail::prc_content
-            (   monitors().processes, screen.dimx(), total_memory_bytes
+            (   monitors().processes, screen.dimx(), total_memory_bytes, &prc_sort
             );
                 prc_generation = monitors.snapshot_generation();
                 prc_width = screen.dimx();
@@ -273,7 +274,12 @@ int main()
             ;
             const int view_h = scroll.view_height;
             if (e.is_mouse())
-            {   if (!scroll.view.Contain(e.mouse().x, e.mouse().y))
+            {   if (tab_index == prc_tab_index
+                    && detail::prc_sort_click(e, prc_scroll, prc_sort))
+                {   prc_table = nullptr;
+                    return true;
+                }
+                if (!scroll.view.Contain(e.mouse().x, e.mouse().y))
                     return false;
                 if (e.mouse().button == Mouse::WheelUp)
                     scroll.offset -= 3;

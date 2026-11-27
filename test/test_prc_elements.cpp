@@ -427,3 +427,127 @@ TEST_CASE("Process table border remains visible beside the scrollbar")
     REQUIRE(scroll.max_offset == 0);
     REQUIRE(unscrolled.PixelAt(79, 0).character == "┐");
 }
+
+TEST_CASE("Process table sorts each visible column when clicked")
+{   sysproc::process_info first;
+    first.pid = 2;
+    first.username = "zebra";
+    first.state = sysproc::process_state::zombie;
+    first.thread_count = 20;
+    first.cpu_percent = 20;
+    first.memory_bytes = 200;
+    first.cpu_time_sec = 20;
+    first.io_read_bytes_per_sec = 200;
+    first.io_write_bytes_per_sec = 200;
+    first.args = {"z-command"};
+    auto second = first;
+    second.pid = 10;
+    second.username = "alice";
+    second.state = sysproc::process_state::running;
+    second.thread_count = 3;
+    second.cpu_percent = 3;
+    second.memory_bytes = 30;
+    second.cpu_time_sec = 3;
+    second.io_read_bytes_per_sec = 30;
+    second.io_write_bytes_per_sec = 30;
+    second.args = {"a-command"};
+
+    for (const auto& [label, high_command] :
+         std::vector<std::pair<std::string, std::string>>
+         {{"PID", "a-command"}, {"USER", "z-command"}, {"STATE", "z-command"},
+          {"THR", "z-command"}, {"CPU%", "z-command"}, {"MEM%", "z-command"},
+          {"TIME+", "z-command"}, {"READ KiB/s", "z-command"},
+          {"WRITE KiB/s", "z-command"}, {"COMMAND", "z-command"}})
+    {   INFO(label);
+        detail::prc_sort_state sort;
+        scroll_state scroll;
+        std::vector processes{first, second};
+        const auto draw = [&]
+        {   auto screen = ftxui::Screen::Create
+            (   ftxui::Dimension::Fixed(160), ftxui::Dimension::Fixed(6)
+            );
+            ftxui::Render(screen, detail::prc_content(processes, 160, 1000, &sort)
+                          | scroll_view(scroll, true, 3));
+            return screen;
+        };
+        auto screen = draw();
+        int x = -1;
+        for (int i = 0; i + static_cast<int>(label.size()) <= 160; ++i)
+        {   std::string text;
+            for (std::size_t j = 0; j < label.size(); ++j)
+                text += screen.PixelAt(i + static_cast<int>(j), 1).character;
+            if (text == label)
+            {   x = i;
+                break;
+            }
+        }
+        REQUIRE(x >= 0);
+        ftxui::Mouse mouse;
+        mouse.button = ftxui::Mouse::Left;
+        mouse.motion = ftxui::Mouse::Pressed;
+        mouse.x = x;
+        mouse.y = scroll.view.y_min + 1;
+        const auto click = [&]
+        {   return detail::prc_sort_click(ftxui::Event::Mouse("", mouse), scroll, sort); };
+        REQUIRE(click());
+        auto output = draw().ToString();
+        INFO("x=" << x << " selected=" << static_cast<int>(*sort.column) << "\n" << output);
+        REQUIRE(output.find("▼ " + label) != std::string::npos);
+        const auto low_command = high_command == "z-command" ? "a-command" : "z-command";
+        REQUIRE(output.find(high_command) != std::string::npos);
+        REQUIRE(output.find(low_command) != std::string::npos);
+        REQUIRE(output.find(high_command) < output.find(low_command));
+        REQUIRE(click());
+        output = draw().ToString();
+        REQUIRE(output.find("▲ " + label) != std::string::npos);
+        REQUIRE(output.find(low_command) < output.find(high_command));
+    }
+}
+
+TEST_CASE("Process sorting tracks headers through scrolling and snapshot updates")
+{   std::vector<sysproc::process_info> processes(20);
+    for (std::size_t i = 0; i < processes.size(); ++i)
+    {   processes[i].pid = static_cast<uint32_t>(i + 1);
+        processes[i].name = "worker" + std::to_string(i + 1);
+    }
+    detail::prc_sort_state sort;
+    scroll_state scroll;
+    const auto draw = [&](int width)
+    {   return render(detail::prc_content(processes, width, 1000, &sort)
+                     | scroll_view(scroll, true, 3), width, 6);
+    };
+    draw(80);
+    scroll.offset = scroll.max_offset;
+    draw(80);
+    const auto click = [&](detail::prc_column column, ftxui::Mouse::Button button,
+                           ftxui::Mouse::Motion motion, int y)
+    {   const auto& box = sort.headers[static_cast<std::size_t>(column)];
+        ftxui::Mouse mouse;
+        mouse.button = button;
+        mouse.motion = motion;
+        mouse.x = box.x_min;
+        mouse.y = y;
+        return detail::prc_sort_click(ftxui::Event::Mouse("", mouse), scroll, sort);
+    };
+    const int header_y = scroll.view.y_min + 1;
+    REQUIRE_FALSE(click(detail::prc_column::pid, ftxui::Mouse::Left, ftxui::Mouse::Released, header_y));
+    REQUIRE_FALSE(click(detail::prc_column::pid, ftxui::Mouse::Right, ftxui::Mouse::Pressed, header_y));
+    REQUIRE_FALSE(click(detail::prc_column::pid, ftxui::Mouse::Left, ftxui::Mouse::Pressed, header_y + 2));
+    REQUIRE(click(detail::prc_column::pid, ftxui::Mouse::Left, ftxui::Mouse::Pressed, header_y));
+    auto output = draw(80);
+    REQUIRE(output.find("▼ PID") != std::string::npos);
+    REQUIRE(click(detail::prc_column::cpu, ftxui::Mouse::Left, ftxui::Mouse::Pressed, header_y));
+    output = draw(80);
+    REQUIRE(output.find("▼ CPU%") != std::string::npos);
+    REQUIRE(output.find("▼ PID") == std::string::npos);
+    processes.back().cpu_percent = 100;
+    scroll.offset = 0;
+    output = draw(80);
+    REQUIRE(output.find("worker20") != std::string::npos);
+    output = draw(35);
+    REQUIRE(output.find("▼ CPU%") != std::string::npos);
+    REQUIRE(std::find(sort.visible.begin(), sort.visible.end(), detail::prc_column::user) == sort.visible.end());
+    processes.clear();
+    draw(80);
+    REQUIRE(sort.visible.empty());
+}
