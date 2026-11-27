@@ -365,6 +365,9 @@ inline ftxui::Element prc_content
             auto element = text(std::move(value)) | size(WIDTH, LESS_THAN, max_width);
             if (numeric)
                 element = std::move(element) | align_right | xflex_grow_factor(0);
+            if (process && id != prc_column::cpu
+                && (!sort || sort->selected_pid != process->pid))
+                element = std::move(element) | dim;
             row.push_back(std::move(element));
         };
         cell(prc_column::pid, process ? std::to_string(process->pid) : "PID", 10, true);
@@ -414,9 +417,11 @@ inline ftxui::Element prc_content
         fixed_width += column_width;
     const int command_width = std::max(1, width - fixed_width);
     for (std::size_t i = 0; i < rows.size(); ++i)
-        rows[i].push_back
-        (   text(std::move(commands[i])) | size(WIDTH, LESS_THAN, command_width)
-        );
+    {   auto command = text(std::move(commands[i])) | size(WIDTH, LESS_THAN, command_width);
+        if (i > 0 && (!sort || sort->selected_pid != ordered[i - 1].process->pid))
+            command = std::move(command) | dim;
+        rows[i].push_back(std::move(command));
+    }
 
     auto table = Table(std::move(rows));
     table.SelectAll().SeparatorVertical(EMPTY);

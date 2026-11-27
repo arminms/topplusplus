@@ -197,8 +197,12 @@ TEST_CASE("Process table has spaces instead of vertical separators")
     }
     REQUIRE(screen.PixelAt(0, 3).character == "│");
     REQUIRE(screen.PixelAt(79, 3).character == "│");
-    const auto output = screen.ToString();
-    REQUIRE(output.find("123  alice") != std::string::npos);
+    std::string row;
+    for (int x = 0; x < screen.dimx(); ++x)
+    {   const auto& character = screen.PixelAt(x, 3).character;
+        row += character.empty() ? " " : character;
+    }
+    REQUIRE(row.find("123  alice") != std::string::npos);
 }
 
 TEST_CASE("Process selection highlights the entire row")
@@ -244,6 +248,67 @@ TEST_CASE("Process selection highlights the entire row")
     REQUIRE(screen.PixelAt(79, 4).background_color != highlight);
 }
 
+TEST_CASE("Only selected process values and CPU values are undimmed")
+{   std::vector<sysproc::process_info> processes(2);
+    for (std::size_t i = 0; i < processes.size(); ++i)
+    {   auto& process = processes[i];
+        process.pid = static_cast<uint32_t>(i + 1);
+        process.username = "user";
+        process.state = sysproc::process_state::running;
+        process.thread_count = 4;
+        process.cpu_percent = 50;
+        process.memory_bytes = 100;
+        process.io_read_bytes_per_sec = 1024;
+        process.io_write_bytes_per_sec = 2048;
+        process.name = i == 0 ? "first" : "second";
+    }
+    detail::prc_sort_state sort;
+    scroll_state scroll;
+    const auto draw = [&]
+    {   auto screen = ftxui::Screen::Create
+        (   ftxui::Dimension::Fixed(160), ftxui::Dimension::Fixed(6)
+        );
+        ftxui::Render
+        (   screen, detail::prc_content(processes, 160, 1000, &sort)
+                    | scroll_view(scroll, true, 3) | ftxui::color(detail::text_color)
+        );
+        return screen;
+    };
+    const auto check_row = [](ftxui::Screen& screen, int y, bool selected)
+    {   int cpu_chars = 0;
+        int other_chars = 0;
+        for (int x = 1; x < 159; ++x)
+        {   const auto& cell = screen.PixelAt(x, y);
+            if (cell.character.empty() || cell.character == " ")
+                continue;
+            INFO("row " << y << ", column " << x << ": " << cell.character);
+            if (cell.foreground_color == detail::load_color(0.5))
+            {   REQUIRE_FALSE(cell.dim);
+                ++cpu_chars;
+            }
+            else
+            {   REQUIRE(cell.dim == !selected);
+                ++other_chars;
+            }
+        }
+        REQUIRE(cpu_chars > 0);
+        REQUIRE(other_chars > 0);
+    };
+    auto screen = draw();
+    check_row(screen, 3, true);
+    check_row(screen, 4, false);
+
+    ftxui::Mouse mouse;
+    mouse.button = ftxui::Mouse::Left;
+    mouse.motion = ftxui::Mouse::Pressed;
+    mouse.x = 10;
+    mouse.y = scroll.view.y_min + 4;
+    REQUIRE(detail::prc_row_click(ftxui::Event::Mouse("", mouse), scroll, processes, sort));
+    screen = draw();
+    check_row(screen, 3, false);
+    check_row(screen, 4, true);
+}
+
 TEST_CASE("Process table adds left padding to every column")
 {   sysproc::process_info process;
     process.pid = 123;
@@ -282,7 +347,7 @@ TEST_CASE("Process table adds left padding to every column")
     REQUIRE(output.find("worker") != std::string::npos);
 }
 
-TEST_CASE("Process table lines are dim without dimming the contents")
+TEST_CASE("Process table lines and unselected process contents are dim")
 {   sysproc::process_info process;
     process.pid = 123;
     process.name = "worker";
@@ -310,7 +375,7 @@ TEST_CASE("Process table lines are dim without dimming the contents")
                 header_seen = true;
             }
             if (cell.character == "w")
-            {   REQUIRE_FALSE(cell.dim);
+            {   REQUIRE(cell.dim);
                 process_seen = true;
             }
         }
