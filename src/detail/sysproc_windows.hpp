@@ -15,6 +15,10 @@
 #include <tlhelp32.h>
 #include <winternl.h>
 
+// Windows macros collide with FTXUI's Canvas::DrawText and Color::RGB.
+#undef DrawText
+#undef RGB
+
 namespace sysproc {
 namespace detail {
 
