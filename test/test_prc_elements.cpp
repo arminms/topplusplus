@@ -41,16 +41,16 @@ TEST_CASE("Process table shows sampled information and adapts to width")
     REQUIRE(compact.find("3.1") != std::string::npos);
     REQUIRE(compact.find("0:12.50") != std::string::npos);
     REQUIRE(compact.find("worker --test") != std::string::npos);
-    REQUIRE(compact.find("READ KiB/s") == std::string::npos);
+    REQUIRE(compact.find("IO/R") == std::string::npos);
 
     const auto wide = render
     (   detail::prc_content(processes, 160, 1024ull * 1024 * 1024), 160
     );
     REQUIRE(wide.find("Running") != std::string::npos);
-    REQUIRE(wide.find("READ KiB/s") != std::string::npos);
-    REQUIRE(wide.find("WRITE KiB/s") != std::string::npos);
-    REQUIRE(wide.find("2.0") != std::string::npos);
-    REQUIRE(wide.find("3.0") != std::string::npos);
+    REQUIRE(wide.find("IO/R") != std::string::npos);
+    REQUIRE(wide.find("IO/W") != std::string::npos);
+    REQUIRE(wide.find("2.00 K/s") != std::string::npos);
+    REQUIRE(wide.find("3.00 K/s") != std::string::npos);
 
     const auto narrow = render(detail::prc_content(processes, 35), 35);
     REQUIRE(narrow.find("123") != std::string::npos);
@@ -228,9 +228,8 @@ TEST_CASE("Process table adds left padding to every column")
     for (int y = 0; y < height; ++y)
         output += line(y) + '\n';
     INFO(header << "\n" << output);
-    REQUIRE(header.find
-    (   "│ PID  USER  STATE    THR  CPU%  MEM%    TIME+  READ KiB/s  WRITE KiB/s"
-    ) != std::string::npos);
+    REQUIRE(header.find("IO/R") != std::string::npos);
+    REQUIRE(header.find("IO/W") != std::string::npos);
     REQUIRE(output.find("COMMAND") != std::string::npos);
     REQUIRE(output.find("123") != std::string::npos);
     REQUIRE(output.find("worker") != std::string::npos);
@@ -392,8 +391,8 @@ TEST_CASE("Process table right-aligns numeric columns at each layout width")
         if (width >= 100)
             check("THR", "2", "12345");
         if (width >= 140)
-        {   check("READ KiB/s", "1.0", "123456.0");
-            check("WRITE KiB/s", "2.0", "123456.0");
+        {   check("IO/R", "1.00 K/s", "120.56 M/s");
+            check("IO/W", "2.00 K/s", "120.56 M/s");
         }
     }
 }
@@ -456,8 +455,8 @@ TEST_CASE("Process table sorts each visible column when clicked")
          std::vector<std::pair<std::string, std::string>>
          {{"PID", "a-command"}, {"USER", "z-command"}, {"STATE", "z-command"},
           {"THR", "z-command"}, {"CPU%", "z-command"}, {"MEM%", "z-command"},
-          {"TIME+", "z-command"}, {"READ KiB/s", "z-command"},
-          {"WRITE KiB/s", "z-command"}, {"COMMAND", "z-command"}})
+          {"TIME+", "z-command"}, {"IO/R", "z-command"},
+          {"IO/W", "z-command"}, {"COMMAND", "z-command"}})
     {   INFO(label);
         detail::prc_sort_state sort;
         scroll_state scroll;

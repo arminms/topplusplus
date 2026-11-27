@@ -42,6 +42,36 @@ inline std::string process_number(double value, std::size_t width)
     return formatted.size() <= width ? formatted : std::format("{:.1e}", value);
 }
 
+inline std::string process_io_rate(double bytes_per_sec, std::size_t width)
+{   if (!std::isfinite(bytes_per_sec))
+        return bytes_per_sec < 0.0 ? "-inf" : "nan";
+
+    constexpr double kibibyte = 1024.0;
+    double value = bytes_per_sec;
+    std::string_view unit = "B/s";
+    if (std::abs(value) >= kibibyte)
+    {   value /= kibibyte;
+        unit = "K/s";
+    }
+    if (std::abs(value) >= kibibyte)
+    {   value /= kibibyte;
+        unit = "M/s";
+    }
+    if (std::abs(value) >= kibibyte)
+    {   value /= kibibyte;
+        unit = "G/s";
+    }
+    if (std::abs(value) >= kibibyte)
+    {   value /= kibibyte;
+        unit = "T/s";
+    }
+
+    auto formatted = std::format("{:.2f} {}", value, unit);
+    if (formatted.size() <= width)
+        return formatted;
+    return std::format("{:.1e} {}", value, unit);
+}
+
 inline std::string process_time(double seconds)
 {   const auto centiseconds = static_cast<uint64_t>(std::round(seconds * 100.0));
     const auto minutes = centiseconds / 6000;
@@ -185,8 +215,8 @@ inline ftxui::Element prc_content
             cell(prc_column::time, process ? process_time(process->cpu_time_sec) : "TIME+", 8, true);
         }
         if (show_io)
-        {   cell(prc_column::read, process ? process_number(process->io_read_bytes_per_sec / 1024.0, 10) : "READ KiB/s", 10, true);
-            cell(prc_column::write, process ? process_number(process->io_write_bytes_per_sec / 1024.0, 11) : "WRITE KiB/s", 11, true);
+        {   cell(prc_column::read, process ? process_io_rate(process->io_read_bytes_per_sec, 12) : "IO/R", 12, true);
+            cell(prc_column::write, process ? process_io_rate(process->io_write_bytes_per_sec, 12) : "IO/W", 12, true);
         }
         auto command = process ? entry->command : "COMMAND";
         if (!process && sort)
