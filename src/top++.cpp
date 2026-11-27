@@ -13,6 +13,7 @@
 #include "cpu_elements.hpp"
 #include "gpu_elements.hpp"
 #include "ram_elements.hpp"
+#include "prc_elements.hpp"
 #include "sys_elements.hpp"
 #include "scroll_view.hpp"
 #include "commons.hpp"
@@ -40,6 +41,7 @@ int main()
     scroll_state gpu_scroll;
     scroll_state ram_scroll;
     scroll_state sys_scroll;
+    scroll_state prc_scroll;
 
 // -----------------------------------------------------------------------------
 // CPU tab
@@ -111,20 +113,80 @@ int main()
     );
 
 // -----------------------------------------------------------------------------
+// PRC tab
+// -----------------------------------------------------------------------------
+
+    Element prc_table;
+    detail::prc_sort_state prc_sort;
+    std::size_t prc_generation = 0;
+    int prc_width = -1;
+    auto prc_tab = Renderer
+    (   [&]
+        {   if (const auto selected_pid = monitors.selected_process_pid())
+            {   prc_sort.selected_pid = selected_pid;
+            }
+            if (!prc_table || prc_generation != monitors.snapshot_generation()
+                || prc_width != screen.dimx())
+        {   const auto total_memory_bytes = monitors().memory
+                ? monitors().memory->total.value
+                : 0;
+            prc_table = detail::prc_content
+            (   monitors().processes, screen.dimx(), total_memory_bytes, &prc_sort
+            );
+                prc_generation = monitors.snapshot_generation();
+                prc_width = screen.dimx();
+            }
+            std::optional<double> process_cpu;
+            std::optional<double> process_ram;
+            if (prc_sort.selected_pid)
+            {   for (const auto& process : monitors().processes)
+                {   if (process.pid != *prc_sort.selected_pid)
+                        continue;
+                    process_cpu = std::isfinite(process.cpu_percent)
+                        ? std::optional<double>(process.cpu_percent / 100.0)
+                        : std::nullopt;
+                    if (monitors().memory
+                        && monitors().memory->total.value > 0)
+                        process_ram = static_cast<double>(process.memory_bytes)
+                            / static_cast<double>(monitors().memory->total.value);
+                    break;
+                }
+            }
+            auto process_plot = detail::process_usage_plot
+            (   monitors.selected_process_pid()
+            ,   process_cpu
+            ,   process_ram
+            ,   monitors.process_cpu_history()
+            ,   monitors.process_ram_history()
+            );
+            constexpr int header_lines = 3; // Top border, header, and separator.
+            return vbox
+            (   {   std::move(process_plot)
+                ,   prc_table
+                    | scroll_view(prc_scroll, true, header_lines)
+                    | flex
+                }
+            ) | flex;
+        }
+    );
+
+// -----------------------------------------------------------------------------
 // Main container
 // -----------------------------------------------------------------------------
 
-    constexpr int sys_tab_index = 0;
+    constexpr int prc_tab_index = 0;
     constexpr int cpu_tab_index = 1;
     constexpr int gpu_tab_index = 2;
     const bool has_gpu_tab = !(gpus && gpus->empty());
     const int ram_tab_index = has_gpu_tab ? 3 : 2;
-    int tab_index = cpu_tab_index;
+    const int sys_tab_index = has_gpu_tab ? 4 : 3;
+    int tab_index = prc_tab_index;
     std::vector<std::string> tab_entries =
-    {   "  SYS  "
+    {   "  PRC  "
     ,   "  CPU  "
     ,   "  GPU  "
     ,   "  RAM  "
+    ,   "  SYS  "
     };
     auto option = MenuOption::HorizontalAnimated();
     option.underline.color_inactive = Color::RGB(126, 133, 163);
@@ -137,10 +199,11 @@ int main()
     |   color(Color::RGB(197, 207, 245))
     ;
     auto tab_container = Container::Tab
-    (   {   sys_tab,
+    (   {   prc_tab,
             cpu_tab,
             gpu_tab,
             ram_tab,
+            sys_tab,
         }
     ,   &tab_index
     );
@@ -237,11 +300,26 @@ int main()
                 ?   cpu_scroll
                 :   tab_index == gpu_tab_index && has_gpu_tab
                 ?   gpu_scroll
+                :   tab_index == prc_tab_index
+                ?   prc_scroll
                 :   ram_scroll
             ;
             const int view_h = scroll.view_height;
             if (e.is_mouse())
-            {   if (!scroll.view.Contain(e.mouse().x, e.mouse().y))
+            {   if (tab_index == prc_tab_index
+                    && detail::prc_sort_click(e, prc_scroll, prc_sort))
+                {   prc_table = nullptr;
+                    return true;
+                }
+                if (tab_index == prc_tab_index
+                    && detail::prc_row_click
+                        (e, prc_scroll, monitors().processes, prc_sort))
+                {   if (prc_sort.selected_pid)
+                        monitors.select_process(*prc_sort.selected_pid);
+                    prc_table = nullptr;
+                    return true;
+                }
+                if (!scroll.view.Contain(e.mouse().x, e.mouse().y))
                     return false;
                 if (e.mouse().button == Mouse::WheelUp)
                     scroll.offset -= 3;

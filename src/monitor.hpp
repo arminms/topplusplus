@@ -3,6 +3,7 @@
 //
 #pragma once
 
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -10,6 +11,7 @@
 #include <hwinfo/hwinfo.h>
 
 #include "circular_buffer.hpp"
+#include "sysproc.hpp"
 
 struct monitor
 {   struct snapshot
@@ -17,6 +19,7 @@ struct monitor
         hwinfo::result<std::vector<hwinfo::Hertz>> frequencies;
         std::vector<hwinfo::result<hwinfo::GpuStatus>> gpus;
         hwinfo::result<hwinfo::MemoryUsage> memory;
+        std::vector<sysproc::process_info> processes;
         // std::vector<std::pair<std::filesystem::path, hwinfo::result<hwinfo::DiskSpace>>> disks;
     };
 
@@ -41,11 +44,16 @@ struct monitor
         {   tick_count_ = 0;
             last_snapshot_ = take_snapshot();
             record_history();
+            ++snapshot_generation_;
         }
     }
 
     const snapshot& operator()() const
     {   return last_snapshot_;
+    }
+
+    std::size_t snapshot_generation() const
+    {   return snapshot_generation_;
     }
 
     // Load history (one buffer per CPU thread), oldest sample first.
@@ -68,6 +76,49 @@ struct monitor
     {   return memory_history_;
     }
 
+    std::optional<uint32_t> selected_process_pid() const
+    {   return selected_process_pid_;
+    }
+
+    void select_process(uint32_t pid)
+    {   for (const auto& process : last_snapshot_.processes)
+    {   if (process.pid != pid)
+            continue;
+        if (selected_process_pid_ == pid
+            && selected_process_start_time_raw_ == process.start_time_raw)
+            return;
+        if (selected_process_pid_ != pid
+            || selected_process_start_time_raw_ != process.start_time_raw)
+        {   selected_process_pid_ = pid;
+            selected_process_start_time_raw_ = process.start_time_raw;
+            process_cpu_history_ = {};
+            process_ram_history_ = {};
+        }
+        record_selected_process_history();
+        return;
+    }
+        if (!last_snapshot_.processes.empty())
+        {   selected_process_pid_ = last_snapshot_.processes.front().pid;
+            selected_process_start_time_raw_
+                = last_snapshot_.processes.front().start_time_raw;
+            process_cpu_history_ = {};
+            process_ram_history_ = {};
+            record_selected_process_history();
+        }
+    }
+
+    const circular_buffer_64<std::optional<double>>& process_cpu_history() const
+    {   return process_cpu_history_; }
+
+    const circular_buffer_64<std::optional<double>>& process_ram_history() const
+    {   return process_ram_history_; }
+
+    const circular_buffer_64<std::optional<double>>& selected_process_cpu_history() const
+    {   return process_cpu_history_; }
+
+    const circular_buffer_64<std::optional<double>>& selected_process_ram_history() const
+    {   return process_ram_history_; }
+
     const hwinfo::result<hwinfo::Memory>& memory_info() const
     {   return memory_info_;
     }
@@ -77,7 +128,9 @@ struct monitor
         {   .cpu = cpu_sampler_->sample()
         ,   .frequencies = hwinfo::cpu_frequencies()
         ,   .memory = hwinfo::memory_usage()
+        ,   .processes = process_sampler_.sample()
         };
+        sysproc::sort_processes(current.processes, sysproc::sort_by::cpu_percent);
         for (std::size_t i = 0; i < gpu_samplers_.size(); ++i)
         {   auto status = gpu_samplers_[i].sample();
             // Non-discrete GPUs use system RAM, so report that instead
@@ -120,11 +173,72 @@ private:
             gpu_history_[i].push(last_snapshot_.gpus[i]);
 
         memory_history_.push(last_snapshot_.memory);
+
+        if (!selected_process_pid_ && !last_snapshot_.processes.empty())
+        {   selected_process_pid_ = last_snapshot_.processes.front().pid;
+            selected_process_start_time_raw_
+                = last_snapshot_.processes.front().start_time_raw;
+        }
+        if (selected_process_pid_)
+        {   bool found = false;
+            for (const auto& process : last_snapshot_.processes)
+            {   if (process.pid != *selected_process_pid_)
+                    continue;
+                if (selected_process_start_time_raw_ != process.start_time_raw)
+                {   selected_process_start_time_raw_ = process.start_time_raw;
+                    process_cpu_history_ = {};
+                    process_ram_history_ = {};
+                }
+                found = true;
+                break;
+            }
+            if (!found)
+            {   process_cpu_history_ = {};
+                process_ram_history_ = {};
+                selected_process_pid_.reset();
+                selected_process_start_time_raw_ = 0;
+            }
+        }
+        if (!selected_process_pid_ && !last_snapshot_.processes.empty())
+        {   selected_process_pid_ = last_snapshot_.processes.front().pid;
+            selected_process_start_time_raw_
+                = last_snapshot_.processes.front().start_time_raw;
+            process_cpu_history_ = {};
+            process_ram_history_ = {};
+        }
+        record_selected_process_history();
+    }
+
+    void record_selected_process_history()
+    {   if (!selected_process_pid_)
+            return;
+        for (const auto& process : last_snapshot_.processes)
+        {   if (process.pid != *selected_process_pid_)
+                continue;
+            process_cpu_history_.push
+            (   std::isfinite(process.cpu_percent)
+                    ? std::optional<double>(process.cpu_percent / 100.0)
+                    : std::nullopt
+            );
+            const auto total_memory = last_snapshot_.memory
+                    ? last_snapshot_.memory->total.value
+                    : 0;
+            process_ram_history_.push
+            (   total_memory > 0
+                    ? std::optional<double>
+                        (static_cast<double>(process.memory_bytes)
+                         / static_cast<double>(total_memory))
+                    : std::nullopt
+            );
+            return;
+        }
     }
 
     std::size_t tick_max_;
     std::size_t tick_count_;
+    std::size_t snapshot_generation_ = 0;
     std::unique_ptr<hwinfo::CpuSampler> cpu_sampler_;
+    sysproc::process_monitor process_sampler_;
     hwinfo::result<hwinfo::Memory> memory_info_;
     std::vector<hwinfo::GpuSampler> gpu_samplers_;
     std::vector<hwinfo::GpuType> gpu_types_;
@@ -133,4 +247,8 @@ private:
     circular_buffer_64<std::optional<double>> cpu_total_history_;
     std::vector<circular_buffer_64<hwinfo::result<hwinfo::GpuStatus>>> gpu_history_;
     circular_buffer_64<hwinfo::result<hwinfo::MemoryUsage>> memory_history_;
+    std::optional<uint32_t> selected_process_pid_;
+    uint64_t selected_process_start_time_raw_ = 0;
+    circular_buffer_64<std::optional<double>> process_cpu_history_;
+    circular_buffer_64<std::optional<double>> process_ram_history_;
 };
